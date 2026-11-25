@@ -31,6 +31,24 @@ export function base32(bytes: Uint8Array, length: number): string {
   return out;
 }
 
+export function base32Decode(s: string): Uint8Array | null {
+  let bits = 0;
+  let value = 0;
+  const out: number[] = [];
+  for (const ch of s) {
+    const v = ID_ALPHABET.indexOf(ch);
+    if (v < 0) return null;
+    value = (value << 5) | v;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+    value &= (1 << bits) - 1;
+  }
+  return new Uint8Array(out);
+}
+
 export function randomId(bytes = 16): string {
   return b64url(crypto.getRandomValues(new Uint8Array(bytes)));
 }

@@ -27,10 +27,19 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
   const [error, setError] = useState('');
   const [showMine, setShowMine] = useState(false);
 
-  const submit = (ev: FormEvent) => {
+  const [checking, setChecking] = useState(false);
+  const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     const id = parseUserId(value);
     if (!id) return setError('Enter a 16-character chat ID or paste a UR Chat link.');
+    if (id !== e.me && !e.convs.has(`dm:${[e.me, id].sort().join(':')}`)) {
+      setChecking(true);
+      const { enabled, found } = await e.lookupUsers([id]);
+      setChecking(false);
+      if (enabled && !found.has(id)) {
+        return setError('No UR Chat account uses this ID. Check it, or the account may have been removed after 7 days without activity.');
+      }
+    }
     const conv = e.startDirectChat(id);
     if (conv) {
       onOpen(conv);
@@ -56,8 +65,8 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
         </Field>
         {error && <p className="text-[13px] text-danger">{error}</p>}
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="submit" className="flex-1">
-            Start chat
+          <Button type="submit" className="flex-1" disabled={checking}>
+            {checking ? 'Checking…' : 'Start chat'}
           </Button>
           <Button variant="secondary" onClick={onScan}>
             <QrCode />

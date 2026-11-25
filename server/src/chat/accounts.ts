@@ -1,0 +1,128 @@
+import { MongoClient, type Collection } from 'mongodb';
+import type { PublicJwk } from './identity.js';
+
+/**
+ * UR Chat accounts in MongoDB: profile and basic details only.
+ * Messages, chat history and files are never stored here.
+ *
+ * Inactive accounts are removed by MongoDB itself through a TTL index on
+ * `lastActiveAt`: once an account hasn't been active for `inactiveDays`,
+ * MongoDB deletes the document (its background task runs about once a minute).
+ */
+export interface AccountDoc {
+  _id: string; // user ID (derived from the public key)
+  publicKey: PublicJwk;
+  name: string;
+  status: string;
+  avatar: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lastActiveAt: Date;
+}
+
+export interface PublicProfile {
+  userId: string;
+  publicKey: PublicJwk;
+  name: string;
+  status: string;
+  avatar: string | null;
+  updatedAt: number;
+}
+
+export interface ProfileInput {
+  name: string;
+  status: string;
+  avatar: string | null;
+}
+
+/** Validates a profile sent by a client. Returns null when it's not acceptable. */
+export function parseProfile(v: unknown): ProfileInput | null {
+  const p = v as Record<string, unknown> | null;
+  if (!p || typeof p.name !== 'string') return null;
+  const name = p.name.trim().slice(0, 60);
+  if (!name) return null;
+  const status = typeof p.status === 'string' ? p.status.trim().slice(0, 140) : '';
+  const a = p.avatar;
+  const avatar =
+    typeof a === 'string' && ((a.startsWith('data:image/') && a.length <= 60_000) || /^(ill|gen):[a-z0-9-]{1,40}$/i.test(a)) ? a : null;
+  return { name, status, avatar };
+}
+
+export function toPublic(doc: AccountDoc): PublicProfile {
+  return {
+    userId: doc._id,
+    publicKey: doc.publicKey,
+    name: doc.name,
+    status: doc.status,
+    avatar: doc.avatar,
+    updatedAt: doc.updatedAt.getTime(),
+  };
+}
+
+export class AccountStore {
+  private constructor(
+    private readonly client: MongoClient,
+    private readonly col: Collection<AccountDoc>,
+  ) {}
+
+  static async connect(uri: string, dbName: string, inactiveDays: number): Promise<AccountStore> {
+    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10_000, appName: 'urfreehere' });
+    await client.connect();
+    const col = client.db(dbName).collection<AccountDoc>('chat_accounts');
+    const store = new AccountStore(client, col);
+    await store.ensureTtl(dbName, inactiveDays);
+    return store;
+  }
+
+  /** Creates the TTL index, or updates its expiry if the setting changed. */
+  private async ensureTtl(dbName: string, inactiveDays: number) {
+    const expireAfterSeconds = Math.round(inactiveDays * 24 * 60 * 60);
+    try {
+      await this.col.createIndex({ lastActiveAt: 1 }, { name: 'inactive_ttl', expireAfterSeconds });
+    } catch (err) {
+      const code = (err as { codeName?: string }).codeName;
+      if (code !== 'IndexOptionsConflict' && code !== 'IndexKeySpecsConflict') throw err;
+      await this.client.db(dbName).command({
+        collMod: 'chat_accounts',
+        index: { name: 'inactive_ttl', expireAfterSeconds },
+      });
+    }
+  }
+
+  get(userId: string): Promise<AccountDoc | null> {
+    return this.col.findOne({ _id: userId });
+  }
+
+  /** Creates the account, or (re)activates it with the given profile if it already exists. */
+  async upsert(userId: string, publicKey: PublicJwk, profile: ProfileInput): Promise<AccountDoc> {
+    const now = new Date();
+    const doc = await this.col.findOneAndUpdate(
+      { _id: userId },
+      {
+        $set: { ...profile, publicKey, updatedAt: now, lastActiveAt: now },
+        $setOnInsert: { createdAt: now },
+      },
+      { upsert: true, returnDocument: 'after' },
+    );
+    return doc!;
+  }
+
+  async updateProfile(userId: string, profile: ProfileInput): Promise<AccountDoc | null> {
+    const now = new Date();
+    return this.col.findOneAndUpdate({ _id: userId }, { $set: { ...profile, updatedAt: now, lastActiveAt: now } }, { returnDocument: 'after' });
+  }
+
+  /** Marks accounts as active now, which pushes back their automatic removal. */
+  async touch(userIds: string[]) {
+    if (!userIds.length) return;
+    await this.col.updateMany({ _id: { $in: userIds } }, { $set: { lastActiveAt: new Date() } });
+  }
+
+  lookup(userIds: string[]): Promise<AccountDoc[]> {
+    return this.col.find({ _id: { $in: userIds } }).limit(100).toArray();
+  }
+
+  close() {
+    return this.client.close();
+  }
+}

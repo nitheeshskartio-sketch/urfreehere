@@ -9,6 +9,7 @@ import { Avatar } from './Avatar';
 import { AvatarPicker } from './AvatarPicker';
 import { userLink } from './Dialogs';
 import { Field, Modal, inputClass } from './Modal';
+import { LoginCodeBox } from './LoginCode';
 import { ShareCard } from './ShareCard';
 
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {
@@ -30,7 +31,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(p.name);
   const [status, setStatus] = useState(p.status);
   const [avatar, setAvatar] = useState<AvatarRef>(p.avatar);
-  const [tab, setTab] = useState<'profile' | 'id' | 'privacy'>('profile');
+  const [tab, setTab] = useState<'profile' | 'id' | 'login' | 'privacy'>('profile');
   const dirty = name !== p.name || status !== p.status || avatar !== p.avatar;
   const blocked = [...e.contacts.values()].filter((c) => c.state === 'blocked');
 
@@ -52,6 +53,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           [
             ['profile', 'Profile'],
             ['id', 'Your chat ID'],
+            ['login', 'Login code'],
             ['privacy', 'Privacy & data'],
           ] as const
         ).map(([t, l]) => (
@@ -110,6 +112,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {tab === 'login' && (
+        <div className="space-y-4 p-4 sm:p-5">
+          {e.identity?.loginCode ? (
+            <>
+              <p className="text-sm leading-relaxed text-ink-soft">
+                Sign in on another device, or after clearing this browser, with <span className="font-medium">I have a login code</span>. Your profile is restored; chats
+                stay on the device where they happened.
+              </p>
+              <LoginCodeBox code={e.identity.loginCode} name={p.name} />
+              <p className="text-[13px] text-muted">Keep it private: anyone with this code can sign in as you. Signing in elsewhere ends the session here.</p>
+            </>
+          ) : (
+            <p className="text-sm leading-relaxed text-muted">
+              This account was created before login codes existed, so it doesn't have one and can only be used on this device. To use login codes, delete all data under
+              Privacy &amp; data and create a new account.
+            </p>
+          )}
+        </div>
+      )}
+
       {tab === 'privacy' && (
         <div className="space-y-5 p-4 text-sm sm:p-5">
           <div className="space-y-2 leading-relaxed text-ink-soft">
@@ -119,12 +141,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               relay may forward the data without being able to read it.
             </p>
             <p>
-              <span className="font-semibold text-ink">What the server sees.</span> The signaling server sees which chat IDs are online, the connection handshakes, and
-              group invitation details (name, picture, description, participant count). It never receives message content or files.
+              <span className="font-semibold text-ink">What the server stores.</span> Your account: chat ID, public key, name, status, picture and when you were last
+              active. Accounts are deleted automatically after 7 days without activity. The server also sees which chat IDs are online, connection handshakes and group
+              invitation details. It never receives messages, chat history or files.
             </p>
             <p>
-              <span className="font-semibold text-ink">Where data is stored.</span> Only on this device, in this browser. Clearing site data or deleting it below removes it
-              permanently. There is no backup.
+              <span className="font-semibold text-ink">Where chats are stored.</span> Only on this device, in this browser. Clearing site data or deleting it below removes
+              them permanently. There is no backup. Your login code restores your account and profile, not your chats.
             </p>
             <p className="text-[12.5px] text-muted">
               Messages are signed by their author and encrypted in transit, but stored unencrypted on each participant's device. UR Chat does not yet offer separately

@@ -13,6 +13,7 @@ import {
   verifySignature,
   type PublicJwk,
 } from './identity.js';
+import { AccountStore, parseProfile, toPublic } from './accounts.js';
 import { InviteStore, type InvitePreview, type JoinRequest } from './invites.js';
 
 /**
@@ -31,6 +32,8 @@ export interface ChatHubOptions {
   clientIp: (socket: Socket) => string;
   dataFile: string | null;
   production: boolean;
+  /** MongoDB accounts; null when MONGODB_URI isn't configured. */
+  accounts: Promise<AccountStore> | null;
 }
 
 interface Session {
@@ -76,6 +79,18 @@ function parsePreview(v: unknown): InvitePreview | null {
 
 export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
   const nsp: Namespace = io.of('/chat');
+  let accounts: AccountStore | null = null;
+  let accountsError = false;
+  opts.accounts
+    ?.then((a) => {
+      accounts = a;
+      console.log('[chat] MongoDB accounts connected');
+    })
+    .catch((err: Error) => {
+      accountsError = true;
+      console.error('[chat] MongoDB unavailable, accounts disabled:', err.message);
+    });
+  const accountsConfigured = () => !!opts.accounts && !accountsError;
   const invites = new InviteStore(opts.dataFile);
   const sessions = new Map<string, Session>(); // userId -> session
   const watchers = new Map<string, Set<string>>(); // watched userId -> watcher userIds
@@ -145,19 +160,48 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     });
 
     // Step 2: client proves it holds the private key.
-    socket.on('auth:prove', (payload: unknown, ackFn: unknown) => {
+    /**
+     * Step 2: client proves it holds the private key, and says what it wants:
+     *  - create: new account (or reactivate a removed one) with the given profile
+     *  - login:  sign in on this device with a login code; the account must exist
+     *  - resume: normal reconnect; the account must still exist
+     */
+    socket.on('auth:prove', async (payload: unknown, ackFn: unknown) => {
       const ack = ackOf(ackFn);
       if (!pendingAuth) return ack({ ok: false, error: 'NO_CHALLENGE' });
+      const p = (payload ?? {}) as { signature?: unknown; mode?: unknown; profile?: unknown };
       const key = keyFromJwk(pendingAuth.jwk);
-      const sig = str((payload as { signature?: unknown } | null)?.signature, 200);
+      const sig = str(p.signature, 200);
       if (!key || !sig || !verifySignature(key, AUTH_PREFIX + pendingAuth.nonce, sig)) {
         pendingAuth = null;
         return ack({ ok: false, error: 'BAD_SIGNATURE' });
       }
       const { userId, jwk } = pendingAuth;
       pendingAuth = null;
+      const mode = p.mode === 'create' || p.mode === 'login' ? p.mode : 'resume';
 
-      // One live session per identity: a newer tab takes over.
+      let account = null;
+      if (accountsConfigured()) {
+        if (!accounts) return ack({ ok: false, error: 'ACCOUNTS_STARTING' });
+        try {
+          if (mode === 'create') {
+            const profile = parseProfile(p.profile);
+            if (!profile) return ack({ ok: false, error: 'INVALID_PROFILE' });
+            account = toPublic(await accounts.upsert(userId, jwk, profile));
+          } else {
+            const doc = await accounts.get(userId);
+            if (!doc) return ack({ ok: false, error: 'ACCOUNT_NOT_FOUND' });
+            await accounts.touch([userId]);
+            account = toPublic(doc);
+          }
+        } catch (err) {
+          console.error('[chat] account lookup failed:', (err as Error).message);
+          return ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+        }
+      }
+      if (socket.disconnected) return;
+
+      // One live session per identity: a newer tab or device takes over.
       const previous = sessions.get(userId);
       if (previous && previous.socket.id !== socket.id) {
         previous.socket.emit('session:replaced');
@@ -166,7 +210,39 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       session = { userId, publicKey: jwk, socket, watching: new Set(), groups: new Set() };
       sessions.set(userId, session);
       notifyPresence(userId, true);
-      ack({ ok: true, ice: buildIceConfig() });
+      ack({ ok: true, ice: buildIceConfig(), account, accounts: accountsConfigured() });
+    });
+
+    socket.on('profile:update', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s || !bucket.take()) return;
+      const profile = parseProfile((payload as { profile?: unknown } | null)?.profile);
+      if (!profile) return ack({ ok: false, error: 'INVALID_PROFILE' });
+      if (!accounts) return ack({ ok: true, stored: false });
+      try {
+        await accounts.updateProfile(s.userId, profile);
+        ack({ ok: true, stored: true });
+      } catch {
+        ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+      }
+    });
+
+    /** Public profile (name, status, picture, public key) for chat IDs. */
+    socket.on('profile:lookup', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s) return;
+      if (!lookupLimiter.take(`u:${s.userId}`)) return ack({ ok: false, error: 'RATE_LIMITED' });
+      const raw = (payload as { ids?: unknown } | null)?.ids;
+      const ids = Array.isArray(raw) ? [...new Set(raw.filter(isUserId))].slice(0, 100) : [];
+      if (!accounts) return ack({ ok: true, enabled: false, profiles: [] });
+      try {
+        const docs = await accounts.lookup(ids);
+        ack({ ok: true, enabled: true, profiles: docs.map(toPublic) });
+      } catch {
+        ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+      }
     });
 
     const authed = (ack: Ack): Session | null => {
@@ -347,12 +423,19 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
 
     socket.on('disconnect', () => {
       if (!session || sessions.get(session.userId)?.socket.id !== socket.id) return;
+      // Leaving counts as activity: the 7-day countdown starts from now.
+      void accounts?.touch([session.userId]).catch(() => {});
       sessions.delete(session.userId);
       for (const id of session.watching) watchers.get(id)?.delete(session.userId);
       for (const g of session.groups) groupMembers.get(g)?.delete(session.userId);
       notifyPresence(session.userId, false);
     });
   });
+
+  // Keep connected users' accounts fresh so long sessions never expire.
+  setInterval(() => {
+    void accounts?.touch([...sessions.keys()]).catch(() => {});
+  }, 30 * 60 * 1000).unref();
 
   setInterval(() => {
     invites.sweep();

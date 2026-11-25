@@ -10,10 +10,10 @@ import {
   type GroupState,
   type SignedInvite,
 } from './groups';
-import { createIdentity, isPublicJwk, keyMatchesId, sign, signable, verify, type Identity } from './identity';
+import { createIdentity, identityFromCode, isPublicJwk, keyMatchesId, sign, signable, verify, type Identity } from './identity';
 import { AUTO_DOWNLOAD_LIMIT, MAX_FILE_SIZE, classify, imageInfo, isRealImage, mimeFor, sanitizeName, validateOutgoing, type FileClass } from './media';
 import { PeerSession } from './peer';
-import { ChatSignaling, lookupInvite, type InviteLookup, type JoinRequest, type SignalData, type SignalingStatus } from './signaling';
+import { ChatSignaling, lookupInvite, type AccountInfo, type AuthMode, type InviteLookup, type JoinRequest, type SignalData, type SignalingStatus } from './signaling';
 import type {
   ChatEvent,
   Contact,
@@ -56,7 +56,7 @@ export interface Toast {
   tone: 'info' | 'error' | 'success';
 }
 
-export type EngineStatus = 'loading' | 'onboarding' | 'ready' | 'unsupported' | 'error';
+export type EngineStatus = 'loading' | 'onboarding' | 'ready' | 'expired' | 'unsupported' | 'error';
 
 export function dmId(a: UserId, b: UserId): ConvId {
   return a < b ? `dm:${a}:${b}` : `dm:${b}:${a}`;
@@ -154,6 +154,15 @@ export class ChatEngine {
   status: EngineStatus = 'loading';
   /** Browser features that are missing when status is "unsupported". */
   unsupportedReason: string[] = [];
+  /** Whether the server keeps accounts (MongoDB configured). */
+  accountsEnabled = false;
+  /** Show the "save your login code" prompt once after sign-up. */
+  showLoginCode = false;
+  private authMode: AuthMode = 'resume';
+  private registered = false;
+  private loginWaiter: ((r: 'found' | 'not-found') => void) | null = null;
+  /** Public keys from the account directory, verified against the user ID. */
+  private directoryKeys = new Map<UserId, PublicJwk>();
   net: SignalingStatus = 'connecting';
   identity: Identity | null = null;
   profile: Profile | null = null;
@@ -268,6 +277,7 @@ export class ChatEngine {
       this.identity = (await db.get<Identity>('kv', 'identity')) ?? null;
       this.profile = (await db.get<Profile>('kv', 'profile')) ?? null;
       this.settings = { ...this.settings, ...((await db.get<Settings>('kv', 'settings')) ?? {}) };
+      this.registered = (await db.get<boolean>('kv', 'registered')) ?? false;
       for (const c of await db.getAll<Contact>('contacts')) this.contacts.set(c.userId, c);
       for (const c of await db.getAll<Conversation>('convs')) this.convs.set(c.id, c);
       for (const [k, v] of Object.entries((await db.get<Record<string, Profile>>('kv', 'profiles')) ?? {})) this.profiles.set(k, v);
@@ -290,6 +300,7 @@ export class ChatEngine {
       return this.notify();
     }
     this.status = 'ready';
+    this.authMode = this.registered ? 'resume' : 'create';
     this.notify();
     this.start();
   }
@@ -302,14 +313,141 @@ export class ChatEngine {
     this.identity = identity;
     this.profile = full;
     this.status = 'ready';
+    this.authMode = 'create';
+    this.showLoginCode = !!identity.loginCode;
     this.notify();
+    this.restartSignaling();
+  }
+
+  /**
+   * Signs in with a login code: recreates the keys, then asks the server for
+   * the account. 'found' restores the profile; 'not-found' means the account
+   * doesn't exist (or was removed after inactivity) and a profile can be set up
+   * again with the same code.
+   */
+  async loginWithCode(code: string): Promise<'found' | 'not-found' | 'offline'> {
+    const identity = await identityFromCode(code);
+    this.identity = identity;
+    this.authMode = 'login';
+    const result = new Promise<'found' | 'not-found' | 'offline'>((resolve) => {
+      this.loginWaiter = resolve;
+      window.setTimeout(() => {
+        if (this.loginWaiter === resolve) {
+          this.loginWaiter = null;
+          resolve('offline');
+        }
+      }, 15_000);
+    });
+    this.restartSignaling();
+    return result;
+  }
+
+  /** Re-creates a removed account with the profile stored on this device. */
+  reactivate() {
+    this.authMode = 'create';
+    this.status = 'ready';
+    this.notify();
+    this.restartSignaling();
+  }
+
+  dismissLoginCode() {
+    this.showLoginCode = false;
+    this.notify();
+  }
+
+  private restartSignaling() {
+    this.signaling?.close();
+    this.signaling = null;
     this.start();
+  }
+
+  private async onAuthed(account: AccountInfo | null, enabled: boolean) {
+    this.accountsEnabled = enabled;
+    let loginDone: ((r: 'found') => void) | null = null;
+    if (this.authMode === 'login') {
+      const waiter = this.loginWaiter;
+      this.loginWaiter = null;
+      loginDone = waiter;
+      const profile = account ? sanitizeProfile(account) : null;
+      if (!profile) {
+        // Nothing to restore (no account, or the server keeps none): set up a profile.
+        this.signaling?.close();
+        this.signaling = null;
+        waiter?.('not-found');
+        return;
+      }
+      this.profile = profile;
+      await db.put('kv', this.identity, 'identity');
+      await db.put('kv', profile, 'profile');
+    } else if (account && this.profile) {
+      // Profile changed on another device: adopt the newer one.
+      const remote = sanitizeProfile(account);
+      if (remote && remote.updatedAt > this.profile.updatedAt) {
+        this.profile = remote;
+        await db.put('kv', remote, 'profile');
+      }
+    }
+    if (this.authMode !== 'resume') {
+      this.registered = true;
+      await db.put('kv', true, 'registered');
+    }
+    const wasLogin = this.authMode === 'login';
+    this.authMode = 'resume';
+    if (wasLogin) this.status = 'ready';
+    this.notify();
+    if (wasLogin) loginDone?.('found');
+    void this.refreshDirectory();
+  }
+
+  private onAccountMissing() {
+    if (this.authMode === 'login') {
+      const waiter = this.loginWaiter;
+      this.loginWaiter = null;
+      this.signaling?.close();
+      this.signaling = null;
+      waiter?.('not-found');
+      return;
+    }
+    // My account was removed (e.g. 7 days without activity).
+    this.signaling?.close();
+    this.signaling = null;
+    for (const s of [...this.sessions.values()]) s.close('expired');
+    this.status = 'expired';
+    this.notify();
+  }
+
+  // ------------------------------------------------------------- directory
+
+  /** Looks up chat IDs in the account directory and remembers verified names, pictures and keys. */
+  async lookupUsers(ids: UserId[]): Promise<{ enabled: boolean; found: Set<UserId> }> {
+    const found = new Set<UserId>();
+    const res = await this.signaling?.lookupProfiles(ids.filter((id) => id !== this.me));
+    if (!res) return { enabled: false, found };
+    for (const p of res.profiles) {
+      // The ID is derived from the key, so the server can't hand out a wrong key unnoticed.
+      if (!(await keyMatchesId(p.publicKey, p.userId))) continue;
+      found.add(p.userId);
+      this.directoryKeys.set(p.userId, p.publicKey as PublicJwk);
+      this.setProfile(p.userId, p);
+      const c = this.contacts.get(p.userId);
+      if (c && !c.pub) this.saveContact({ ...c, pub: p.publicKey as PublicJwk });
+    }
+    return { enabled: res.enabled, found };
+  }
+
+  private async refreshDirectory() {
+    const ids = [...this.relevantPeers()];
+    for (let i = 0; i < ids.length; i += 100) await this.lookupUsers(ids.slice(i, i + 100));
   }
 
   private start() {
     if (this.signaling || !this.identity) return;
-    this.signaling = new ChatSignaling(this.identity, {
+    this.signaling = new ChatSignaling(
+      this.identity,
+      {
+      onAuthed: (account, enabled) => void this.onAuthed(account, enabled),
       onStatus: (s) => {
+        if (s === 'missing') return this.onAccountMissing();
         this.net = s;
         if (s === 'online') {
           this.refreshWatch();
@@ -323,14 +461,20 @@ export class ChatEngine {
       onPresence: (userId, online) => this.onPresence(userId, online),
       onJoinRequest: (req) => void this.onJoinRequest(req),
       onInviteResult: (r) => this.onInviteResult(r.groupId, r.accepted, r.by, r.reason),
-    });
+      },
+      () => ({ mode: this.authMode, profile: this.profile }),
+    );
     this.signaling.start();
+    if (this.listenersAttached) return;
+    this.listenersAttached = true;
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.activeConv) this.markRead(this.activeConv);
       if (document.visibilityState === 'hidden') void this.flushWrites();
     });
     window.addEventListener('pagehide', () => void this.flushWrites());
   }
+
+  private listenersAttached = false;
 
   /** Take the session back after another tab replaced this one. */
   reclaim() {
@@ -556,6 +700,8 @@ export class ChatEngine {
   private knownKey(userId: UserId): PublicJwk | undefined {
     const c = this.contacts.get(userId);
     if (c?.pub) return c.pub;
+    const d = this.directoryKeys.get(userId);
+    if (d) return d;
     for (const g of this.groups.values()) {
       const m = g.members.get(userId) ?? g.former.get(userId);
       if (m) return m.pub;
@@ -688,6 +834,12 @@ export class ChatEngine {
         // A member is syncing a group we don't know yet: we may have been added while
         // offline. Fetch it provisionally; it's dropped if the log doesn't include us.
         else if (!this.convs.has(conv) && /^g:[A-Za-z0-9_-]{16,40}$/.test(conv)) this.onGroupHello(peer, conv.slice(2));
+        // Same for a direct chat we don't have yet (e.g. signed in on a new device).
+        else if (!this.convs.has(conv) && conv === dmId(this.me, peer)) {
+          this.ensureDm(peer, this.contacts.get(peer)?.state === 'contact' ? 'contact' : 'request');
+          this.requestSync(s, conv);
+          this.notify();
+        }
         break;
       }
       case 'events':
@@ -1279,6 +1431,7 @@ export class ChatEngine {
     const conv = this.ensureDm(peer, 'contact');
     this.refreshWatch();
     this.maybeConnect(peer);
+    void this.lookupUsers([peer]);
     this.notify();
     return conv.id;
   }
@@ -1363,6 +1516,7 @@ export class ChatEngine {
     this.profile = p;
     await db.put('kv', p, 'profile');
     for (const s of this.sessions.values()) s.send({ t: 'profile', profile: p });
+    void this.signaling?.updateProfile(p);
     this.notify();
   }
 
@@ -1503,7 +1657,7 @@ export class ChatEngine {
   async createInvite(groupId: string, opts: { expiresAt: number | null; maxUses: number | null }): Promise<LocalInvite> {
     const g = this.groups.get(groupId);
     if (!g || !this.isAdmin(groupId)) throw new Error('Only admins can create invitations.');
-    if (!this.signaling?.online) throw new Error("You're offline. Connect to the internet to create an invitation.");
+    if (!(await this.waitOnline()) || !this.signaling) throw new Error("You're offline. Connect to the internet to create an invitation.");
     const token = randomId(18);
     const unsigned = { v: 1 as const, groupId, token, by: this.me, expiresAt: opts.expiresAt, maxUses: opts.maxUses };
     const signedInvite: SignedInvite = { ...unsigned, sig: await sign(this.identity!, inviteSignable(unsigned)) };
@@ -1552,9 +1706,19 @@ export class ChatEngine {
     return lookupInvite(key);
   }
 
+  /** Waits (briefly) for the signaling connection, e.g. right after the page opened. */
+  private async waitOnline(timeoutMs = 10_000): Promise<boolean> {
+    const until = Date.now() + timeoutMs;
+    while (!this.signaling?.online) {
+      if (Date.now() > until || this.net === 'replaced' || this.status !== 'ready') return false;
+      await new Promise((r) => window.setTimeout(r, 200));
+    }
+    return true;
+  }
+
   /** Joiner side: sign a join operation and ask the group (via the hub) to add us. */
   async joinGroup(key: string, info: InviteLookup & { signedInvite?: SignedInvite }): Promise<ConvId> {
-    if (!this.signaling?.online) throw new Error("You're offline. Connect to the internet to join.");
+    if (!(await this.waitOnline()) || !this.signaling) throw new Error("You're offline. Connect to the internet to join.");
     const id = `g:${info.groupId}`;
     if (this.isMember(info.groupId)) return id;
     if (!info.signedInvite) throw new Error('This invitation is incomplete.');

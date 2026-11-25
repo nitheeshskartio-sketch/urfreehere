@@ -77,6 +77,11 @@ export const config = {
   },
 
   chat: {
+    /** MongoDB for UR Chat accounts (profiles only). Leave empty to run without accounts. */
+    mongoUri: env.MONGODB_URI || '',
+    mongoDb: env.MONGODB_DB || 'urfreehere',
+    /** Accounts with no activity for this many days are deleted by a MongoDB TTL index. */
+    inactiveDays: Number(env.ACCOUNT_INACTIVE_DAYS) > 0 ? Number(env.ACCOUNT_INACTIVE_DAYS) : 7,
     /** Where invite metadata is kept between restarts. Set CHAT_DATA_FILE=none to keep it in memory only. */
     dataFile:
       env.CHAT_DATA_FILE === 'none' ? null : resolve(projectRoot, env.CHAT_DATA_FILE || 'data/chat-invites.json'),

@@ -1,4 +1,6 @@
-import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSquare, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSquare, UserX, X } from 'lucide-react';
+import { Button } from '../../../ui/Button';
+import { LoginCodeDialog } from '../components/LoginCode';
 import { useCallback, useEffect, useState } from 'react';
 import { navigate } from '../../../lib/router';
 import { ChatView } from '../components/ChatView';
@@ -93,6 +95,31 @@ export default function ChatApp({ path }: { path: string }) {
     );
   }
   if (e.status === 'onboarding') return <Onboarding />;
+  if (e.status === 'expired') {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
+        <div className="max-w-sm rounded-xl border border-line bg-white p-6 text-center shadow-card">
+          <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-warning-soft text-warning">
+            <UserX className="size-6" />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold">Your account was removed</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            UR Chat accounts are removed after 7 days without activity. Your chats are still on this device. Reactivate to keep the same chat ID and profile.
+          </p>
+          <div className="mt-6 flex flex-col gap-2">
+            <Button onClick={() => engine.reactivate()}>Reactivate my account</Button>
+            <Button
+              variant="ghost"
+              className="text-danger"
+              onClick={() => window.confirm('Delete your chats and identity from this device and start over?') && void engine.deleteAllData()}
+            >
+              Delete everything and start over
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const showList = desktop || !activeConv;
   const showChat = !!activeConv;
@@ -154,6 +181,9 @@ export default function ChatApp({ path }: { path: string }) {
       {joinKey && <JoinDialog initialKey={joinKey} onClose={() => setJoinKey(null)} onOpen={open} />}
       {inviteFor && <InviteDialog groupId={inviteFor} onClose={() => setInviteFor(null)} />}
 
+      {e.showLoginCode && e.identity?.loginCode && (
+        <LoginCodeDialog code={e.identity.loginCode} name={e.profile?.name ?? ''} onClose={() => e.dismissLoginCode()} />
+      )}
       <Toasts />
     </div>
   );

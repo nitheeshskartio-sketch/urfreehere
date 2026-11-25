@@ -1,15 +1,41 @@
-import { ArrowRight, KeyRound, MessagesSquare, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowRight, KeyRound, LoaderCircle, LogIn, MessagesSquare, ShieldCheck, Smartphone } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link } from '../../../site/Link';
 import { SiteMark } from '../../../site/Logo';
 import { Button } from '../../../ui/Button';
 import { engine } from '../lib/engine';
+import { normalizeLoginCode } from '../lib/identity';
 import type { AvatarRef } from '../lib/types';
 import { AvatarPicker } from './AvatarPicker';
 import { Field, inputClass } from './Modal';
 
 export function Onboarding() {
-  const [step, setStep] = useState<'welcome' | 'profile'>('welcome');
+  const [step, setStep] = useState<'welcome' | 'login' | 'profile'>('welcome');
+  const [code, setCode] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [restoring, setRestoring] = useState(false);
+
+  const login = async (ev: FormEvent) => {
+    ev.preventDefault();
+    setLoginError('');
+    const normalized = await normalizeLoginCode(code);
+    if (!normalized) return setLoginError("That code isn't valid. Check for typos: it has 25 letters and numbers.");
+    setLoginBusy(true);
+    try {
+      const result = await engine.loginWithCode(normalized);
+      if (result === 'not-found') {
+        setRestoring(true);
+        setStep('profile');
+      } else if (result === 'offline') {
+        setLoginError("Couldn't reach UR Chat. Check your connection and try again.");
+      }
+      // 'found': the engine switches to the app.
+    } catch {
+      setLoginError("Couldn't sign in with this code.");
+    }
+    setLoginBusy(false);
+  };
   const [name, setName] = useState('');
   const [status, setStatus] = useState('');
   const [avatar, setAvatar] = useState<AvatarRef>(null);
@@ -46,16 +72,16 @@ export function Onboarding() {
             <h1 className="mt-5 text-2xl font-semibold tracking-tight">Chat directly, device to device</h1>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
               Messages, photos and documents go straight between devices over encrypted peer-to-peer connections. No phone
-              number, no email, no account.
+              number or email needed.
             </p>
             <ul className="mt-6 space-y-3.5 text-sm">
               <li className="flex gap-3">
                 <KeyRound className="mt-0.5 size-4 shrink-0 text-ink-soft" />
-                <span className="text-ink-soft">A private key created on this device becomes your chat ID.</span>
+                <span className="text-ink-soft">You get a secret login code to sign in on any device.</span>
               </li>
               <li className="flex gap-3">
                 <Smartphone className="mt-0.5 size-4 shrink-0 text-ink-soft" />
-                <span className="text-ink-soft">Your chats are stored only on this device, in this browser.</span>
+                <span className="text-ink-soft">Only your profile is kept on our server. Chats stay on your devices.</span>
               </li>
               <li className="flex gap-3">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ink-soft" />
@@ -66,12 +92,53 @@ export function Onboarding() {
               Get started
               <ArrowRight />
             </Button>
+            <Button variant="secondary" size="lg" className="mt-2 w-full" onClick={() => setStep('login')}>
+              <LogIn />I have a login code
+            </Button>
           </div>
+        ) : step === 'login' ? (
+          <form onSubmit={login} className="w-full max-w-[460px] rounded-xl border border-line bg-white shadow-card" noValidate>
+            <div className="border-b border-line px-6 py-5">
+              <h1 className="text-xl font-semibold tracking-tight">Sign in with your login code</h1>
+              <p className="mt-1 text-sm text-muted">Your profile is restored. Chats from other devices aren't transferred: they stay on the device where they happened.</p>
+            </div>
+            <div className="space-y-3 px-6 py-5">
+              <Field label="Login code">
+                <input
+                  className={`${inputClass} font-mono uppercase tracking-wider placeholder:font-sans placeholder:normal-case placeholder:tracking-normal`}
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    setLoginError('');
+                  }}
+                  placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  autoFocus
+                />
+              </Field>
+              {loginError && <p className="text-sm text-danger">{loginError}</p>}
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-line bg-surface px-6 py-4 sm:flex-row sm:justify-between">
+              <Button variant="ghost" onClick={() => setStep('welcome')}>
+                Back
+              </Button>
+              <Button type="submit" size="lg" disabled={loginBusy || !code.trim()}>
+                {loginBusy ? <LoaderCircle className="animate-spin" /> : null}
+                {loginBusy ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </div>
+          </form>
         ) : (
           <form onSubmit={submit} className="w-full max-w-[520px] rounded-xl border border-line bg-white shadow-card" noValidate>
             <div className="border-b border-line px-6 py-5">
-              <h1 className="text-xl font-semibold tracking-tight">Create your profile</h1>
-              <p className="mt-1 text-sm text-muted">This is what people see when you chat with them. You can change it later.</p>
+              <h1 className="text-xl font-semibold tracking-tight">{restoring ? 'Set up your profile again' : 'Create your profile'}</h1>
+              <p className="mt-1 text-sm text-muted">
+                {restoring
+                  ? 'No account was found for this code. It may have been removed after 7 days without activity. Your chat ID stays the same.'
+                  : 'This is what people see when you chat with them. You can change it later.'}
+              </p>
             </div>
             <div className="space-y-5 px-6 py-5">
               <Field label="Display name">
@@ -101,7 +168,13 @@ export function Onboarding() {
               {error && <p className="text-sm text-danger">{error}</p>}
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-line bg-surface px-6 py-4 sm:flex-row sm:justify-between">
-              <Button variant="ghost" onClick={() => setStep('welcome')}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (restoring) window.location.reload();
+                  else setStep('welcome');
+                }}
+              >
                 Back
               </Button>
               <Button type="submit" size="lg" disabled={busy}>

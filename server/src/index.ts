@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
+import { AccountStore } from './chat/accounts.js';
 import { attachChat } from './chat/hub.js';
 import { config } from './config.js';
 import { buildIceConfig } from './ice.js';
@@ -114,6 +115,9 @@ const chat = attachChat(io, app, {
   clientIp,
   dataFile: config.chat.dataFile,
   production: config.isProduction,
+  accounts: config.chat.mongoUri
+    ? AccountStore.connect(config.chat.mongoUri, config.chat.mongoDb, config.chat.inactiveDays)
+    : null,
 });
 
 // --- Static client + SPA fallback (after all API routes) ------------------

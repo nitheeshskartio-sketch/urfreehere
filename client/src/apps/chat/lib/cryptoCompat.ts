@@ -48,6 +48,41 @@ export async function generateKeys(): Promise<KeyMaterial> {
   return { priv, x: pub.slice(1, 33), y: pub.slice(33, 65) };
 }
 
+/**
+ * Deterministic key pair from a login-code seed: the same code always gives
+ * the same keys (and therefore the same user ID) on any device.
+ */
+export async function keysFromSeed(seed: Uint8Array): Promise<KeyMaterial> {
+  const { p256 } = await loadNoble();
+  const prefix = new TextEncoder().encode('urfree-chat-key-v1:');
+  let priv: Uint8Array | null = null;
+  for (let counter = 0; counter < 100 && !priv; counter++) {
+    const input = new Uint8Array(prefix.length + seed.length + 1);
+    input.set(prefix);
+    input.set(seed, prefix.length);
+    input[input.length - 1] = counter;
+    const candidate = await sha256(input);
+    if (p256.utils.isValidPrivateKey(candidate)) priv = candidate;
+  }
+  if (!priv) throw new Error('Could not derive a key from this code.');
+  const pub = p256.getPublicKey(priv, false);
+  const x = pub.slice(1, 33);
+  const y = pub.slice(33, 65);
+  if (hasSubtle) {
+    const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    // Imported as non-extractable: it can sign but can't be read back out.
+    const privateKey = await crypto.subtle.importKey(
+      'jwk',
+      { kty: 'EC', crv: 'P-256', d: b64(priv), x: b64(x), y: b64(y), ext: false },
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['sign'],
+    );
+    return { privateKey, x, y };
+  }
+  return { priv, x, y };
+}
+
 /** ECDSA P-256 / SHA-256, raw 64-byte signature. */
 export async function signBytes(keys: { privateKey?: CryptoKey; priv?: Uint8Array }, data: Uint8Array): Promise<Uint8Array> {
   if (keys.privateKey && hasSubtle) {

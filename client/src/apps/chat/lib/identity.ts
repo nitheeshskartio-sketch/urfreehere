@@ -1,5 +1,5 @@
-import { generateKeys, sha256, signBytes, verifyBytes } from './cryptoCompat';
-import { b64url, base32, canonical, fromB64url, ID_LENGTH } from './encoding';
+import { keysFromSeed, sha256, signBytes, verifyBytes } from './cryptoCompat';
+import { b64url, base32, base32Decode, canonical, fromB64url, ID_ALPHABET, ID_LENGTH } from './encoding';
 import type { PublicJwk, UserId } from './types';
 
 export interface Identity {
@@ -10,6 +10,41 @@ export interface Identity {
   publicKey?: CryptoKey;
   /** Raw key when created on a plain-HTTP page (local network development). */
   priv?: Uint8Array;
+  /** Secret login code the keys are derived from (absent for identities created before login codes). */
+  loginCode?: string;
+}
+
+// ---- login codes -------------------------------------------------------------
+// 15 random bytes = 24 base32 characters, plus 1 check character: 25 characters,
+// shown as XXXXX-XXXXX-XXXXX-XXXXX-XXXXX.
+
+async function checkChar(body: string): Promise<string> {
+  const h = await sha256(enc.encode(`urfree-login:${body}`));
+  return ID_ALPHABET[h[0] & 31];
+}
+
+export async function generateLoginCode(): Promise<string> {
+  const body = base32(crypto.getRandomValues(new Uint8Array(15)), 24);
+  return body + (await checkChar(body));
+}
+
+export function formatLoginCode(code: string): string {
+  return code.match(/.{1,5}/g)?.join('-') ?? code;
+}
+
+/** Normalises user input; returns null if the code is malformed or mistyped (check character). */
+export async function normalizeLoginCode(input: string): Promise<string | null> {
+  const code = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 25 || [...code].some((c) => !ID_ALPHABET.includes(c))) return null;
+  return (await checkChar(code.slice(0, 24))) === code[24] ? code : null;
+}
+
+/** Recreates the identity that belongs to a login code. */
+export async function identityFromCode(code: string): Promise<Identity> {
+  const seed = base32Decode(code.slice(0, 24))!;
+  const keys = await keysFromSeed(seed);
+  const publicJwk: PublicJwk = { kty: 'EC', crv: 'P-256', x: b64url(keys.x), y: b64url(keys.y) };
+  return { userId: await userIdFromJwk(publicJwk), publicJwk, privateKey: keys.privateKey, priv: keys.priv, loginCode: code };
 }
 
 const enc = new TextEncoder();
@@ -19,11 +54,9 @@ export async function userIdFromJwk(jwk: PublicJwk): Promise<UserId> {
   return base32(digest.subarray(0, 10), ID_LENGTH);
 }
 
-/** New identity. On secure pages the private key is non-extractable: it can sign but never be read out. */
+/** New identity with a fresh login code. */
 export async function createIdentity(): Promise<Identity> {
-  const keys = await generateKeys();
-  const publicJwk: PublicJwk = { kty: 'EC', crv: 'P-256', x: b64url(keys.x), y: b64url(keys.y) };
-  return { userId: await userIdFromJwk(publicJwk), publicJwk, privateKey: keys.privateKey, publicKey: keys.publicKey, priv: keys.priv };
+  return identityFromCode(await generateLoginCode());
 }
 
 export async function sign(identity: Identity, data: string): Promise<string> {

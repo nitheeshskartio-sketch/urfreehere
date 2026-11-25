@@ -30,7 +30,19 @@ export interface InviteResult {
   reason?: string;
 }
 
-export type SignalingStatus = 'connecting' | 'online' | 'offline' | 'replaced';
+export type SignalingStatus = 'connecting' | 'online' | 'offline' | 'replaced' | 'missing';
+
+export type AuthMode = 'create' | 'login' | 'resume';
+
+/** Account as stored on the server (MongoDB): profile and basic details only. */
+export interface AccountInfo {
+  userId: UserId;
+  publicKey: unknown;
+  name: string;
+  status: string;
+  avatar: string | null;
+  updatedAt: number;
+}
 
 export interface SignalingHandlers {
   onStatus(status: SignalingStatus): void;
@@ -38,6 +50,8 @@ export interface SignalingHandlers {
   onPresence(userId: UserId, online: boolean): void;
   onJoinRequest(req: JoinRequest): void;
   onInviteResult(result: InviteResult): void;
+  /** Logged in. `account` is null when the server runs without accounts. */
+  onAuthed(account: AccountInfo | null, accountsEnabled: boolean): void;
 }
 
 const BASE: string = import.meta.env.VITE_SIGNALING_URL || '';
@@ -52,11 +66,13 @@ export class ChatSignaling {
   private watched = new Set<UserId>();
   private groups = new Set<string>();
   private authed = false;
+  private replaced = false;
   ice: IceConfig | null = null;
 
   constructor(
     private readonly identity: Identity,
     private readonly handlers: SignalingHandlers,
+    private readonly authInfo: () => { mode: AuthMode; profile: unknown },
   ) {
     this.socket = io(`${BASE}/chat`, {
       autoConnect: false,
@@ -67,11 +83,13 @@ export class ChatSignaling {
     this.socket.on('connect', () => void this.authenticate());
     this.socket.on('disconnect', () => {
       this.authed = false;
-      handlers.onStatus('offline');
+      // Keep "signed in elsewhere" visible instead of a generic offline state.
+      if (!this.replaced) handlers.onStatus('offline');
     });
     this.socket.on('connect_error', () => handlers.onStatus('offline'));
     this.socket.on('session:replaced', () => {
       this.authed = false;
+      this.replaced = true;
       this.socket.io.opts.reconnection = false;
       handlers.onStatus('replaced');
     });
@@ -86,6 +104,7 @@ export class ChatSignaling {
   }
 
   start() {
+    this.replaced = false;
     this.handlers.onStatus('connecting');
     this.socket.io.opts.reconnection = true;
     this.socket.connect();
@@ -113,15 +132,46 @@ export class ChatSignaling {
         publicKey: this.identity.publicJwk,
       });
       const signature = await sign(this.identity, `urfree-chat-auth:${nonce}`);
-      const res = await this.request<{ ice: IceConfig }>('auth:prove', { signature });
+      const res = await this.request<{ ice: IceConfig; account: AccountInfo | null; accounts: boolean }>('auth:prove', {
+        signature,
+        ...this.authInfo(),
+      });
       this.ice = res.ice;
       this.authed = true;
+      this.handlers.onAuthed(res.account ?? null, !!res.accounts);
       this.handlers.onStatus('online');
       // Restore subscriptions after every (re)connect.
       if (this.watched.size) void this.flushWatch([...this.watched]);
       if (this.groups.size) void this.request('groups:announce', { groupIds: [...this.groups] }).catch(() => {});
-    } catch {
+    } catch (err) {
+      const code = (err as Error).message;
+      if (code === 'ACCOUNT_NOT_FOUND') {
+        // The account doesn't exist (never created, or removed after inactivity).
+        this.socket.io.opts.reconnection = false;
+        this.socket.disconnect();
+        this.handlers.onStatus('missing');
+        return;
+      }
       this.handlers.onStatus('offline');
+      // The account service may be starting or briefly unavailable: try again shortly.
+      if (code === 'ACCOUNTS_STARTING' || code === 'ACCOUNTS_UNAVAILABLE') {
+        window.setTimeout(() => this.socket.connected && void this.authenticate(), 3000);
+      }
+    }
+  }
+
+  async updateProfile(profile: unknown) {
+    if (!this.authed) return;
+    await this.request('profile:update', { profile }).catch(() => {});
+  }
+
+  /** Public profiles from the account directory. `enabled` is false when the server has no accounts. */
+  async lookupProfiles(ids: UserId[]): Promise<{ enabled: boolean; profiles: AccountInfo[] }> {
+    if (!this.authed || !ids.length) return { enabled: false, profiles: [] };
+    try {
+      return await this.request<{ enabled: boolean; profiles: AccountInfo[] }>('profile:lookup', { ids });
+    } catch {
+      return { enabled: false, profiles: [] };
     }
   }
 

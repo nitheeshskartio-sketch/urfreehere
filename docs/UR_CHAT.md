@@ -34,9 +34,28 @@ The server is never a message transport. If a direct path is impossible, a TURN 
 
 - On first use the browser generates a non-extractable ECDSA P‑256 key pair, stored in IndexedDB.
 - **User ID** = base32(SHA‑256(`crv:x:y`)[0..10]), 16 characters, shown as `XXXX-XXXX-XXXX-XXXX`. The ID *is* a fingerprint of the public key.
-- **Server login:** `auth:hello` (ID + public key, and the server checks that the ID matches the key), then `auth:prove` (signature over a random nonce). Only after that can a socket send signals or watch presence.
+- **Server login:** `auth:hello` (ID + public key, and the server checks that the ID matches the key), then `auth:prove` (signature over a random nonce, plus `mode`: `create`, `login` or `resume`). Only after that can a socket send signals or watch presence.
 - **Peer authentication:** each side signs `urfree-chat-dtls|kind|from|to|<DTLS fingerprints>` in its offer or answer. The receiver checks that the key hashes to the expected user ID and that the signature is valid. A signaling server that swapped SDPs to sit in the middle would fail this check.
 - There is one identity per browser profile. Clearing site data deletes it, and there is no account recovery.
+
+## Accounts (MongoDB) and login codes
+
+Only **accounts** are stored on the server, in MongoDB collection `chat_accounts`, database `MONGODB_DB`:
+
+```js
+{ _id: "<chat ID>", publicKey: { kty, crv, x, y }, name, status, avatar,
+  createdAt, updatedAt, lastActiveAt }
+```
+
+**Never stored:** messages, chat history, files, contacts, group membership.
+
+- **Removal after 7 days of inactivity.** A TTL index `inactive_ttl` on `lastActiveAt` (`expireAfterSeconds = ACCOUNT_INACTIVE_DAYS × 86400`, default 604,800 s) makes MongoDB delete the document by itself. Its TTL monitor runs about once a minute. `lastActiveAt` is refreshed on login, every 30 minutes while connected, and on disconnect. The index is created, or its expiry updated, when the server starts.
+- **Login code.** At sign-up the app creates a secret 25-character code (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`: 120 random bits plus a check character). The signing key is derived from it (`SHA-256("urfree-chat-key-v1:" ‖ seed ‖ counter)` → P‑256 private key), so the same code gives the same key pair and chat ID on any device. The code is shown once after sign-up and stays available in **Settings → Login code**. The server never sees it: login still uses the signed-challenge flow below.
+- **Login on another device:** choose **I have a login code** and enter it. The server returns the stored profile. Chats are not transferred, and signing in elsewhere ends the session on the previous device.
+- **Removed account:** a returning device sees "Your account was removed" and can **Reactivate** it (same ID, profile from the device; local chats stay) or delete everything. Logging in with the code of a removed account leads to "Set up your profile again", keeping the same chat ID.
+- **Directory:** signed-in clients can look up chat IDs (`profile:lookup`) to get a name, picture and public key. The key is accepted only if it hashes to the requested ID, so the server can't substitute one. This lets **New chat** reject IDs with no account, and lets admins add contacts to groups without having connected to them first.
+- **Without `MONGODB_URI`**, everything works as before, without accounts or login codes. If MongoDB is configured but unreachable, logins are refused with a retry until it's back.
+- Accounts created before login codes existed have no code and can't be used on other devices.
 
 ## Messages and sync
 
@@ -93,7 +112,7 @@ Location uses only the browser's Geolocation API, and only after the user presse
 | Transport | WebRTC DTLS on every connection. TURN relays can't decrypt. |
 | Authentication | Server login by signature. Peers verify signed DTLS fingerprints against the user ID. |
 | Integrity | Every message and group op is signed by its author and checked on receipt and on catch-up. |
-| Server knowledge | Online IDs, who signals whom, group IDs a client belongs to, invite metadata. No message content and no files. |
+| Server knowledge | Account profiles in MongoDB (deleted after 7 days inactive), online IDs, who signals whom, group IDs a client belongs to, invite metadata. No message content and no files. |
 | Storage | Unencrypted IndexedDB on each participant's device. "Delete everything" in Settings wipes it. |
 | Unknown senders | Shown under **Message requests**: no read receipts, no auto-downloads, Accept or Block. Blocked IDs can't connect. |
 | Rate limits | Connections, invite lookups, joins and invite creation per IP or user; signals per socket. |
