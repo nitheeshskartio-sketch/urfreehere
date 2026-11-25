@@ -4,6 +4,6 @@ export const SITE = {
   shortName: 'UR',
   tagline: 'Free, private tools that run in your browser.',
   description:
-    'UR Free Here is a collection of simple browser apps with no accounts, no ads and no tracking. Your data stays on your devices.',
+    'UR Free Here is a collection of simple browser apps with no ads and no tracking. No email or phone number needed, and your files and messages stay on your devices.',
   year: new Date().getFullYear(),
 };

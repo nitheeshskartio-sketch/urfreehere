@@ -1,5 +1,5 @@
-import { ArrowRight, Check, Gift, Globe, ShieldCheck, UserX } from 'lucide-react';
-import { listedApps, type AppDefinition } from '../apps/registry';
+import { ArrowRight, Check, Gift, Globe, ShieldCheck, UserX, X } from 'lucide-react';
+import { ChatIcon, listedApps, type AppDefinition } from '../apps/registry';
 import { SITE } from '../site/config';
 import { Link } from '../site/Link';
 import { buttonClasses } from '../ui/Button';
@@ -12,7 +12,7 @@ export default function Home() {
       <section className="page pb-14 pt-12 sm:pb-20 sm:pt-20">
         <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[13px] font-medium text-ink-soft">
           <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
-          Free · No accounts · No tracking
+          Free · No ads · No tracking
         </p>
         <h1 className="mt-5 max-w-[720px] text-[34px] font-semibold leading-[1.1] tracking-tight sm:text-[48px]">
           Everyday tools that respect your privacy.
@@ -60,7 +60,7 @@ export default function Home() {
           </div>
           <ul className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
             <Principle icon={Gift} title="Free to use" text="Every app is free, with no trials, limits on features or upsells." />
-            <Principle icon={UserX} title="No accounts" text="Open an app and use it. No sign-up, email or password." />
+            <Principle icon={UserX} title="No email or phone number" text="Most apps need no account at all. Where one helps, it's created with just a name." />
             <Principle icon={ShieldCheck} title="Private by design" text="Your data is processed on your devices whenever possible." />
             <Principle icon={Globe} title="Nothing to install" text="Runs in any modern browser on Android, iOS, Windows, macOS and Linux." />
           </ul>
@@ -80,7 +80,7 @@ export default function Home() {
             </p>
             <p>
               <span className="font-medium text-ink">Minimal servers.</span> When an app needs a server, for example to
-              connect two devices, the server handles only what is required and stores nothing.
+              connect two devices, the server handles only what is required. Files and messages are never stored on it.
             </p>
             <p>
               <span className="font-medium text-ink">Per-app details.</span> Each app explains exactly what happens to your
@@ -90,6 +90,50 @@ export default function Home() {
               </Link>
               .
             </p>
+          </div>
+
+          <div className="mt-8 rounded-xl border border-line bg-white p-5 shadow-card sm:p-6">
+            <div className="flex items-start gap-3.5">
+              <ChatIcon className="size-10 shrink-0" />
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold">What UR Chat stores to let you sign in on other devices</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted">
+                  UR Chat keeps a small account on our server so you can sign in on another phone or computer with your login code and
+                  find people by their chat ID.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-5 text-sm sm:grid-cols-3">
+              <div>
+                <p className="font-medium text-ink">Stored</p>
+                <ul className="mt-2 space-y-1.5 text-muted">
+                  {['Your chat ID and public key', 'Name, status and profile picture', 'When your account was created and last active'].map((t) => (
+                    <li key={t} className="flex gap-2">
+                      <Check className="mt-0.5 size-4 shrink-0 text-success" strokeWidth={2.5} />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-ink">Never stored</p>
+                <ul className="mt-2 space-y-1.5 text-muted">
+                  {['Messages and chat history', 'Photos, documents and locations', 'Your login code or contacts'].map((t) => (
+                    <li key={t} className="flex gap-2">
+                      <X className="mt-0.5 size-4 shrink-0 text-danger" strokeWidth={2.5} />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-ink">Automatic removal</p>
+                <p className="mt-2 leading-relaxed text-muted">
+                  Accounts that aren't used for 7 days are deleted automatically. Signing in on a new device restores your profile, not your
+                  chats, which stay on the device where they happened.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
