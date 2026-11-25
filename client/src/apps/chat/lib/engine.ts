@@ -1556,12 +1556,20 @@ export class ChatEngine {
     this.notify();
   }
 
-  async deleteAllData() {
+  async deleteAllData(redirect = '/chat') {
     for (const s of this.sessions.values()) s.close('wipe');
     this.signaling?.close();
     for (const url of this.fileUrls.values()) URL.revokeObjectURL(url);
     await db.destroy();
-    window.location.assign('/chat');
+    window.location.assign(redirect);
+  }
+
+  /**
+   * Signs out of this device: removes the identity, chats and files stored here.
+   * The account itself stays on the server, so the login code signs back in.
+   */
+  signOut() {
+    return this.deleteAllData('/chat/login');
   }
 
   // --------------------------------------------------------------- groups

@@ -25,7 +25,7 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
   );
 }
 
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
+export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; onSignOut: () => void }) {
   const e = useEngine();
   const p = e.profile!;
   const [name, setName] = useState(p.name);
@@ -129,6 +129,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               Privacy &amp; data and create a new account.
             </p>
           )}
+        </div>
+      )}
+
+      {tab === 'login' && (
+        <div className="border-t border-line px-4 py-4 sm:px-5">
+          <p className="text-[13px] font-medium text-ink-soft">Sign out of this device</p>
+          <p className="mt-1 text-[13px] text-muted">Removes your chats from this device. Sign back in any time with your login code.</p>
+          <Button variant="danger" size="sm" className="mt-3" onClick={onSignOut}>
+            Sign out
+          </Button>
         </div>
       )}
 

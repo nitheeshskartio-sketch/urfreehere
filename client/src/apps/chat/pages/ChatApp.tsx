@@ -1,13 +1,15 @@
 import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSquare, UserX, X } from 'lucide-react';
 import { Button } from '../../../ui/Button';
+import { Avatar } from '../components/Avatar';
 import { LoginCodeDialog } from '../components/LoginCode';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../../../lib/router';
 import { ChatView } from '../components/ChatView';
 import { InviteDialog, JoinDialog, NewChatDialog, NewGroupDialog, ScanDialog } from '../components/Dialogs';
 import { InfoPanel } from '../components/InfoPanel';
 import { Onboarding } from '../components/Onboarding';
 import { SettingsDialog } from '../components/SettingsDialog';
+import { SignOutDialog } from '../components/SignOutDialog';
 import { Sidebar, type Dialog } from '../components/Sidebar';
 import { useEngine, useMediaQuery } from '../hooks';
 import { engine } from '../lib/engine';
@@ -23,7 +25,7 @@ function parseRoute(path: string) {
   const conv = path.match(/^\/chat\/c\/([^/]+)$/)?.[1];
   const user = path.match(/^\/chat\/u\/([A-Za-z0-9-]+)$/)?.[1];
   const join = path.match(/^\/(?:chat\/)?join\/([A-Za-z0-9_-]+)$/)?.[1];
-  return { conv: conv ? decodeURIComponent(conv) : null, user, join };
+  return { conv: conv ? decodeURIComponent(conv) : null, user, join, login: path === '/chat/login' };
 }
 
 const convPath = (id: string) => `/chat/c/${encodeURIComponent(id)}`;
@@ -50,6 +52,9 @@ export default function ChatApp({ path }: { path: string }) {
   }, []);
 
   const open = useCallback((convId: string) => navigate(convPath(convId)), []);
+
+  const cameFromOnboarding = useRef(false);
+  if (e.status === 'onboarding') cameFromOnboarding.current = true;
 
   // Deep links: contact link and group invite link.
   useEffect(() => {
@@ -97,7 +102,13 @@ export default function ChatApp({ path }: { path: string }) {
       </div>
     );
   }
-  if (e.status === 'onboarding') return <Onboarding />;
+  if (e.status === 'onboarding') return <Onboarding initialStep={route.login ? 'login' : 'welcome'} />;
+  // Just signed in or created an account on /chat/login: go to the chats.
+  if (route.login && cameFromOnboarding.current) {
+    queueMicrotask(() => navigate('/chat', { replace: true }));
+    return null;
+  }
+  if (route.login) return <SignedInNotice onSignOut={() => setDialog('sign-out')} dialog={dialog} onCloseDialog={() => setDialog(null)} />;
   if (e.status === 'expired') {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
@@ -180,7 +191,8 @@ export default function ChatApp({ path }: { path: string }) {
       {dialog === 'new-group' && <NewGroupDialog onClose={() => setDialog(null)} onOpen={open} />}
       {dialog === 'join' && <JoinDialog onClose={() => setDialog(null)} onOpen={open} />}
       {dialog === 'scan' && <ScanDialog onClose={() => setDialog(null)} onResult={onScan} />}
-      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onSignOut={() => setDialog('sign-out')} />}
+      {dialog === 'sign-out' && <SignOutDialog onClose={() => setDialog(null)} />}
       {joinKey && <JoinDialog initialKey={joinKey} onClose={() => setJoinKey(null)} onOpen={open} />}
       {inviteFor && <InviteDialog groupId={inviteFor} onClose={() => setInviteFor(null)} />}
 
@@ -188,6 +200,28 @@ export default function ChatApp({ path }: { path: string }) {
         <LoginCodeDialog code={e.identity.loginCode} name={e.profile?.name ?? ''} onClose={() => e.dismissLoginCode()} />
       )}
       <Toasts />
+    </div>
+  );
+}
+
+/** /chat/login while already signed in: continue, or sign out to use another account. */
+function SignedInNotice({ onSignOut, dialog, onCloseDialog }: { onSignOut: () => void; dialog: Dialog; onCloseDialog: () => void }) {
+  const e = useEngine();
+  const p = e.profile!;
+  return (
+    <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
+      <div className="w-full max-w-sm rounded-xl border border-line bg-white p-6 text-center shadow-card">
+        <Avatar avatar={p.avatar} name={p.name} seed={e.me} size={64} className="mx-auto" />
+        <h1 className="mt-4 text-lg font-semibold">You're signed in as {p.name}</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted">To use a different account on this device, sign out first.</p>
+        <div className="mt-6 flex flex-col gap-2">
+          <Button onClick={() => navigate('/chat', { replace: true })}>Continue to chats</Button>
+          <Button variant="ghost" className="text-danger" onClick={onSignOut}>
+            Sign out
+          </Button>
+        </div>
+      </div>
+      {dialog === 'sign-out' && <SignOutDialog onClose={onCloseDialog} />}
     </div>
   );
 }

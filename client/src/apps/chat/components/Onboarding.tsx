@@ -3,14 +3,22 @@ import { useState, type FormEvent } from 'react';
 import { Link } from '../../../site/Link';
 import { SiteMark } from '../../../site/Logo';
 import { Button } from '../../../ui/Button';
+import { navigate } from '../../../lib/router';
 import { engine } from '../lib/engine';
 import { normalizeLoginCode } from '../lib/identity';
 import type { AvatarRef } from '../lib/types';
 import { AvatarPicker } from './AvatarPicker';
 import { Field, inputClass } from './Modal';
 
-export function Onboarding() {
-  const [step, setStep] = useState<'welcome' | 'login' | 'profile'>('welcome');
+type Step = 'welcome' | 'login' | 'profile';
+
+export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome' | 'login' }) {
+  const [step, setStepState] = useState<Step>(initialStep);
+  // Keep the address in sync so /chat/login can be bookmarked and shared.
+  const setStep = (next: Step) => {
+    setStepState(next);
+    navigate(next === 'login' ? '/chat/login' : '/chat', { replace: true });
+  };
   const [code, setCode] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -61,6 +69,16 @@ export function Onboarding() {
           <SiteMark className="size-7" />
           <span className="text-[15px] font-semibold tracking-tight">UR Chat</span>
         </Link>
+        {step === 'login' ? (
+          <Button variant="ghost" size="sm" onClick={() => setStep('welcome')}>
+            Create account
+          </Button>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={() => setStep('login')}>
+            <LogIn />
+            Sign in
+          </Button>
+        )}
       </header>
 
       <main className="flex flex-1 items-start justify-center px-4 py-8 sm:items-center sm:py-12">
@@ -99,8 +117,8 @@ export function Onboarding() {
         ) : step === 'login' ? (
           <form onSubmit={login} className="w-full max-w-[460px] rounded-xl border border-line bg-white shadow-card" noValidate>
             <div className="border-b border-line px-6 py-5">
-              <h1 className="text-xl font-semibold tracking-tight">Sign in with your login code</h1>
-              <p className="mt-1 text-sm text-muted">Your profile is restored. Chats from other devices aren't transferred: they stay on the device where they happened.</p>
+              <h1 className="text-xl font-semibold tracking-tight">Sign in to UR Chat</h1>
+              <p className="mt-1 text-sm text-muted">Enter your login code to get your account and profile on this device. Chats aren't transferred: they stay on the device where they happened.</p>
             </div>
             <div className="space-y-3 px-6 py-5">
               <Field label="Login code">
@@ -119,10 +137,13 @@ export function Onboarding() {
                 />
               </Field>
               {loginError && <p className="text-sm text-danger">{loginError}</p>}
+              <p className="text-[13px] text-muted">
+                Your login code was shown when you created your account, and is in Settings → Login code on a device where you're signed in.
+              </p>
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-line bg-surface px-6 py-4 sm:flex-row sm:justify-between">
               <Button variant="ghost" onClick={() => setStep('welcome')}>
-                Back
+                New here? Create an account
               </Button>
               <Button type="submit" size="lg" disabled={loginBusy || !code.trim()}>
                 {loginBusy ? <LoaderCircle className="animate-spin" /> : null}

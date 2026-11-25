@@ -188,11 +188,16 @@ function AppCard({ app, featured }: { app: AppDefinition; featured: boolean }) {
             </li>
           ))}
         </ul>
-        <div className="mt-7 flex flex-1 items-end">
+        <div className="mt-7 flex flex-1 flex-col items-stretch justify-end gap-2 sm:flex-row sm:items-end sm:justify-start">
           <Link href={app.path} className={buttonClasses('primary', 'lg', 'w-full sm:w-auto')}>
             Open {app.name}
             <ArrowRight />
           </Link>
+          {app.secondaryAction && (
+            <Link href={app.secondaryAction.href} className={buttonClasses('secondary', 'lg', 'w-full sm:w-auto')}>
+              {app.secondaryAction.label}
+            </Link>
+          )}
         </div>
       </div>
 

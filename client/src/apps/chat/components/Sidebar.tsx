@@ -6,6 +6,7 @@ import {
   EllipsisVertical,
   Inbox,
   KeyRound,
+  LogOut,
   MessageSquarePlus,
   Pin,
   PinOff,
@@ -28,7 +29,7 @@ import { Avatar } from './Avatar';
 import { Menu } from './Menu';
 import { Ticks } from './Ticks';
 
-export type Dialog = 'new-chat' | 'new-group' | 'join' | 'scan' | 'settings' | null;
+export type Dialog = 'new-chat' | 'new-group' | 'join' | 'scan' | 'settings' | 'sign-out' | null;
 
 type Filter = 'all' | 'dm' | 'group' | 'unread';
 
@@ -105,6 +106,7 @@ export function Sidebar({
             { label: 'Join a group', icon: KeyRound, onSelect: () => onDialog('join') },
             { label: 'Scan QR code', icon: QrCode, onSelect: () => onDialog('scan') },
             { label: 'Settings', icon: Settings, onSelect: () => onDialog('settings') },
+            { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => onDialog('sign-out') },
           ]}
         />
       </div>

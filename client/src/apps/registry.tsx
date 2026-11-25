@@ -13,6 +13,8 @@ export interface AppDefinition {
   highlights: string[];
   /** Short "how it works" steps shown on the home page. */
   steps: string[];
+  /** Optional second button on the home page card, e.g. "Sign in". */
+  secondaryAction?: { label: string; href: string };
   /** Links shown in the header while inside the app. */
   nav: { label: string; href: string }[];
   /**
@@ -82,6 +84,7 @@ export const APPS: AppDefinition[] = [
       'Chat one-to-one or in small groups and share photos, documents and locations over direct peer-to-peer connections. No phone number or email: sign in on any device with your login code.',
     path: '/chat',
     icon: ChatIcon,
+    secondaryAction: { label: 'Sign in', href: '/chat/login' },
     highlights: ['Sign in on any device', 'Peer-to-peer', 'Groups with invite links'],
     steps: ['Create a profile and save your login code', 'Share your chat ID, link or QR code', 'Chat directly when you are both online'],
     nav: [],
