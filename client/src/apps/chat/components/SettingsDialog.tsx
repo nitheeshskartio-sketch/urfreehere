@@ -1,0 +1,166 @@
+import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '../../../ui/Button';
+import { CopyButton } from '../../../ui/CopyButton';
+import { useEngine } from '../hooks';
+import { formatUserId } from '../lib/encoding';
+import type { AvatarRef } from '../lib/types';
+import { Avatar } from './Avatar';
+import { AvatarPicker } from './AvatarPicker';
+import { userLink } from './Dialogs';
+import { Field, Modal, inputClass } from './Modal';
+import { ShareCard } from './ShareCard';
+
+function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 py-2">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-[12.5px] leading-relaxed text-muted">{hint}</span>
+      </span>
+      <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-slate-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-accent peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40" />
+    </label>
+  );
+}
+
+export function SettingsDialog({ onClose }: { onClose: () => void }) {
+  const e = useEngine();
+  const p = e.profile!;
+  const [name, setName] = useState(p.name);
+  const [status, setStatus] = useState(p.status);
+  const [avatar, setAvatar] = useState<AvatarRef>(p.avatar);
+  const [tab, setTab] = useState<'profile' | 'id' | 'privacy'>('profile');
+  const dirty = name !== p.name || status !== p.status || avatar !== p.avatar;
+  const blocked = [...e.contacts.values()].filter((c) => c.state === 'blocked');
+
+  const save = async () => {
+    if (!name.trim()) return;
+    await e.updateProfile({ name, status, avatar });
+    e.toast('Profile updated', 'success');
+  };
+
+  const wipe = () => {
+    const typed = window.prompt('This permanently deletes your identity, contacts, chats and files from this device. Type DELETE to confirm.');
+    if (typed === 'DELETE') void e.deleteAllData();
+  };
+
+  return (
+    <Modal title="Settings" onClose={onClose} wide>
+      <div className="flex gap-1 border-b border-line px-3 pt-2">
+        {(
+          [
+            ['profile', 'Profile'],
+            ['id', 'Your chat ID'],
+            ['privacy', 'Privacy & data'],
+          ] as const
+        ).map(([t, l]) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'profile' && (
+        <div className="space-y-5 p-4 sm:p-5">
+          <AvatarPicker value={avatar} onChange={setAvatar} name={name} />
+          <Field label="Display name">
+            <input className={inputClass} value={name} onChange={(ev) => setName(ev.target.value)} maxLength={60} />
+          </Field>
+          <Field label="Status">
+            <input className={inputClass} value={status} onChange={(ev) => setStatus(ev.target.value)} maxLength={140} placeholder="Optional" />
+          </Field>
+          <div className="flex justify-end">
+            <Button onClick={save} disabled={!dirty || !name.trim()}>
+              Save profile
+            </Button>
+          </div>
+          <div className="border-t border-line pt-4">
+            <p className="text-[13px] font-medium text-ink-soft">Preferences</p>
+            <Toggle
+              checked={e.settings.enterToSend}
+              onChange={(v) => void e.updateSettings({ enterToSend: v })}
+              label="Press Enter to send"
+              hint="Use Shift + Enter for a new line."
+            />
+
+          </div>
+        </div>
+      )}
+
+      {tab === 'id' && (
+        <div className="space-y-4 p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <Avatar avatar={p.avatar} name={p.name} seed={e.me} size={48} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{p.name}</p>
+              <p className="font-mono text-sm tracking-wider text-ink-soft">{formatUserId(e.me)}</p>
+            </div>
+            <CopyButton text={e.me} size="sm" />
+          </div>
+          <p className="text-[13px] leading-relaxed text-muted">
+            Share your ID, link or QR code with people you want to chat with. Your ID comes from a key created on this device, so nobody else can use it.
+          </p>
+          <ShareCard link={userLink(e.me)} qrName="my-ur-chat-qr" shareTitle={`Chat with ${p.name} on UR Chat`} />
+        </div>
+      )}
+
+      {tab === 'privacy' && (
+        <div className="space-y-5 p-4 text-sm sm:p-5">
+          <div className="space-y-2 leading-relaxed text-ink-soft">
+            <p>
+              <span className="font-semibold text-ink">How messages travel.</span> Messages, photos, documents and locations go directly between devices over WebRTC
+              connections, which are always encrypted (DTLS). Each connection is checked against the other person's chat ID. When a direct path is blocked, an encrypted
+              relay may forward the data without being able to read it.
+            </p>
+            <p>
+              <span className="font-semibold text-ink">What the server sees.</span> The signaling server sees which chat IDs are online, the connection handshakes, and
+              group invitation details (name, picture, description, participant count). It never receives message content or files.
+            </p>
+            <p>
+              <span className="font-semibold text-ink">Where data is stored.</span> Only on this device, in this browser. Clearing site data or deleting it below removes it
+              permanently. There is no backup.
+            </p>
+            <p className="text-[12.5px] text-muted">
+              Messages are signed by their author and encrypted in transit, but stored unencrypted on each participant's device. UR Chat does not yet offer separately
+              verified end-to-end encryption with key-safety numbers.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[13px] font-medium text-ink-soft">Blocked contacts</p>
+            {blocked.length ? (
+              <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
+                {blocked.map((c) => (
+                  <li key={c.userId} className="flex items-center gap-3 px-3 py-2">
+                    <Avatar avatar={e.profileOf(c.userId)?.avatar} name={e.nameOf(c.userId)} seed={c.userId} size={32} />
+                    <span className="min-w-0 flex-1 truncate">{e.nameOf(c.userId)}</span>
+                    <Button variant="secondary" size="sm" onClick={() => e.unblockUser(c.userId)}>
+                      Unblock
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-muted">Nobody is blocked.</p>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-danger/20 bg-danger-soft p-4">
+            <p className="font-semibold text-danger">Delete all data on this device</p>
+            <p className="mt-1 text-[13px] text-ink-soft">Removes your identity, contacts, chats and received files from this browser. This can't be undone.</p>
+            <Button variant="danger" className="mt-3" onClick={wipe}>
+              <Trash2 />
+              Delete everything
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}

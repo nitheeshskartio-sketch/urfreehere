@@ -1,0 +1,56 @@
+/*
+ * UR Free Here — universal design tokens.
+ *
+ * Every app on the site uses these through Tailwind (see tailwind.config.js),
+ * so changing a value here restyles the whole site consistently. Colours are
+ * stored as space-separated RGB channels so Tailwind opacity modifiers work
+ * (e.g. `bg-accent/10`).
+ */
+:root {
+  /* Surfaces */
+  --c-bg: 255 255 255;
+  --c-surface: 248 250 252;
+
+  /* Text */
+  --c-ink: 23 32 51;
+  --c-ink-soft: 51 65 85;
+  --c-muted: 100 116 139;
+
+  /* Lines */
+  --c-line: 229 231 235;
+  --c-line-strong: 209 213 219;
+
+  /* Brand accent */
+  --c-accent: 37 99 235;
+  --c-accent-hover: 29 78 216;
+  --c-accent-soft: 239 246 255;
+
+  /* Status */
+  --c-success: 22 163 74;
+  --c-success-soft: 240 253 244;
+  --c-danger: 220 38 38;
+  --c-danger-soft: 254 242 242;
+  --c-warning: 180 83 9;
+  --c-warning-soft: 255 251 235;
+
+  /* Shape & depth */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-pop: 0 4px 12px -2px rgb(16 24 40 / 0.08), 0 1px 3px rgb(16 24 40 / 0.05);
+
+  /* Type */
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Layout */
+  --content-max: 1080px;
+  --header-h: 56px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --header-h: 64px;
+  }
+}
