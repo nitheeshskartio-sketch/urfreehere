@@ -117,7 +117,7 @@ export const APPS: AppDefinition[] = [
       { label: 'Privacy', href: '/mic#privacy' },
     ],
     // Hidden until you decide to publish it on the site.
-    listed: false,
+    listed: true,
   },
 ];
 
