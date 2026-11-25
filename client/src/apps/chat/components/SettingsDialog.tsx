@@ -5,12 +5,12 @@ import { CopyButton } from '../../../ui/CopyButton';
 import { useEngine } from '../hooks';
 import { formatUserId } from '../lib/encoding';
 import type { AvatarRef } from '../lib/types';
-import { Avatar } from './Avatar';
-import { AvatarPicker } from './AvatarPicker';
+import { Avatar } from '../../../ui/avatar/Avatar';
+import { AvatarPicker } from '../../../ui/avatar/AvatarPicker';
 import { userLink } from './Dialogs';
-import { Field, Modal, inputClass } from './Modal';
+import { Field, Modal, inputClass } from '../../../ui/Modal';
 import { LoginCodeBox } from './LoginCode';
-import { ShareCard } from './ShareCard';
+import { ShareCard } from '../../../ui/ShareCard';
 
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {
   return (

@@ -5,6 +5,7 @@ import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { AccountStore } from './chat/accounts.js';
 import { attachChat } from './chat/hub.js';
+import { attachMic } from './mic/hub.js';
 import { config } from './config.js';
 import { buildIceConfig } from './ice.js';
 import { TokenBucket, WindowLimiter } from './rateLimit.js';
@@ -23,7 +24,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self)');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self)');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   if (config.forceHttps) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader(
@@ -46,7 +47,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/healthz', (_req, res) => {
-  res.json({ ok: true, rooms: rooms.size, chatOnline: chat.onlineCount() });
+  res.json({ ok: true, rooms: rooms.size, chatOnline: chat.onlineCount(), micRooms: mic.roomCount() });
 });
 
 // Static client + SPA fallback are registered after the API routes (see below).
@@ -119,6 +120,9 @@ const chat = attachChat(io, app, {
     ? AccountStore.connect(config.chat.mongoUri, config.chat.mongoDb, config.chat.inactiveDays)
     : null,
 });
+
+// --- Mic voice rooms (namespace /mic + /api/mic) -------------------------
+const mic = attachMic(io, app, { clientIp, production: config.isProduction });
 
 // --- Static client + SPA fallback (after all API routes) ------------------
 if (config.serveClient && existsSync(config.clientDist)) {

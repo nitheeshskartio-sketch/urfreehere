@@ -6,6 +6,7 @@ A site of free, private browser apps that share one design system. More apps can
 | --- | --- | --- | --- |
 | **UR Postman**: peer-to-peer file transfer | `/postman` | Listed | below |
 | **UR Chat**: peer-to-peer messaging, groups, invites | `/chat` | Listed | [docs/UR_CHAT.md](docs/UR_CHAT.md) |
+| **Mic**: peer-to-peer voice rooms with speaker highlighting | `/mic`, `/room/<code>` | Hidden (`listed: false`) | [docs/MIC.md](docs/MIC.md) |
 
 ## UR Postman
 

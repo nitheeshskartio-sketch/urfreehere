@@ -19,10 +19,10 @@ import { useEngine } from '../hooks';
 import { sanitizeName } from '../lib/media';
 import { dayLabel } from '../lib/time';
 import type { Conversation, StoredEvent } from '../lib/types';
-import { Avatar } from './Avatar';
+import { Avatar } from '../../../ui/avatar/Avatar';
 import { Composer } from './Composer';
 import { ImageViewer } from './ImageViewer';
-import { Menu } from './Menu';
+import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
 
 export function ChatView({

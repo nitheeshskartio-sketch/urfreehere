@@ -2,7 +2,7 @@ import { Crosshair, ExternalLink, LoaderCircle, MapPin, Send } from 'lucide-reac
 import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { formatCoord, mapsLink, parseLocationInput } from '../lib/geo';
-import { Field, Modal, inputClass } from './Modal';
+import { Field, Modal, inputClass } from '../../../ui/Modal';
 
 /**
  * Share a location. The browser is asked for the current position only when

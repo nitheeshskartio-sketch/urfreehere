@@ -53,6 +53,17 @@ export function ChatIcon({ className = 'size-8' }: { className?: string }) {
   );
 }
 
+/** Mic: a simple microphone in a rounded square. */
+export function MicIcon({ className = 'size-8' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="rgb(var(--c-mic))" />
+      <rect x="12.5" y="6.5" width="7" height="12.5" rx="3.5" fill="#fff" />
+      <path d="M9.5 15.5a6.5 6.5 0 0 0 13 0M16 22v3.5M12.5 25.5h7" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export const APPS: AppDefinition[] = [
   {
     id: 'postman',
@@ -89,6 +100,24 @@ export const APPS: AppDefinition[] = [
     steps: ['Create a profile and save your login code', 'Share your chat ID, link or QR code', 'Chat directly when you are both online'],
     nav: [],
     listed: true,
+  },
+  {
+    id: 'mic',
+    name: 'Mic',
+    category: 'Voice rooms',
+    tagline: 'Your room. Your people. Just talk.',
+    description:
+      'Create a voice room, invite people with a link, code or QR code, and talk. Voices go directly between devices, and you can always see who is speaking.',
+    path: '/mic',
+    icon: MicIcon,
+    highlights: ['No sign-up', 'Peer-to-peer audio', 'Live speaker highlighting'],
+    steps: ['Create a room', 'Invite people with a link, code or QR code', 'Join and talk'],
+    nav: [
+      { label: 'How it works', href: '/mic#how-it-works' },
+      { label: 'Privacy', href: '/mic#privacy' },
+    ],
+    // Hidden until you decide to publish it on the site.
+    listed: false,
   },
 ];
 

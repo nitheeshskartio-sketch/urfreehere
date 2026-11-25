@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { CopyButton } from '../../../ui/CopyButton';
 import { formatLoginCode } from '../lib/identity';
-import { Modal } from './Modal';
+import { Modal } from '../../../ui/Modal';
 
 function downloadCode(code: string, name: string) {
   const text = `UR Chat login code\n\n${formatLoginCode(code)}\n\nAccount: ${name}\nKeep this code private. Anyone with it can sign in as you.\nUse it in UR Chat → "I have a login code" on any device.\n`;

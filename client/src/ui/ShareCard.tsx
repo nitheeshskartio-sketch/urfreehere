@@ -1,7 +1,7 @@
 import { Download, Share2 } from 'lucide-react';
-import { Button } from '../../../ui/Button';
-import { CopyButton } from '../../../ui/CopyButton';
-import { QRCode } from '../../../ui/QRCode';
+import { Button } from './Button';
+import { CopyButton } from './CopyButton';
+import { QRCode } from './QRCode';
 import { downloadQr } from '../lib/qr';
 
 /** QR code + link with copy, share and download actions. */

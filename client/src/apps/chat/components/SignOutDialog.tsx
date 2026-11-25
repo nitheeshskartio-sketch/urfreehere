@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { useEngine } from '../hooks';
 import { LoginCodeBox } from './LoginCode';
-import { Modal } from './Modal';
+import { Modal } from '../../../ui/Modal';
 
 /** Confirms signing out, and makes sure the user has their login code first. */
 export function SignOutDialog({ onClose }: { onClose: () => void }) {

@@ -25,6 +25,9 @@
   --c-accent-hover: 29 78 216;
   --c-accent-soft: 239 246 255;
 
+  /* App brand colours (icons) */
+  --c-mic: 124 58 237;
+
   /* Status */
   --c-success: 22 163 74;
   --c-success-soft: 240 253 244;

@@ -7,10 +7,10 @@ import { formatUserId } from '../lib/encoding';
 import { MAX_GROUP_MEMBERS } from '../lib/groups';
 import { sanitizeName } from '../lib/media';
 import type { Conversation, FileBody, StoredEvent } from '../lib/types';
-import { Avatar } from './Avatar';
-import { AvatarPicker } from './AvatarPicker';
-import { Menu } from './Menu';
-import { Field, Modal, inputClass } from './Modal';
+import { Avatar } from '../../../ui/avatar/Avatar';
+import { AvatarPicker } from '../../../ui/avatar/AvatarPicker';
+import { Menu } from '../../../ui/Menu';
+import { Field, Modal, inputClass } from '../../../ui/Modal';
 
 export function InfoPanel({ conv, onClose, onInvite, onOpenChat }: { conv: Conversation; onClose: () => void; onInvite: () => void; onOpenChat: (id: string) => void }) {
   const e = useEngine();

@@ -1,9 +1,9 @@
 import { Check, ImageUp, Shuffle, X } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { Button } from '../../../ui/Button';
-import { AVATAR_SETS, AvatarArt, randomAvatarRef } from '../lib/avatars';
-import { makeAvatarImage } from '../lib/media';
-import type { AvatarRef } from '../lib/types';
+import { Button } from '../Button';
+import { AVATAR_SETS, AvatarArt, randomAvatarRef } from './avatars';
+import { makeAvatarImage } from './image';
+import type { AvatarRef } from './avatars';
 import { Avatar } from './Avatar';
 
 /** Choose a picture: upload, built-in illustration, random pattern, or none. */

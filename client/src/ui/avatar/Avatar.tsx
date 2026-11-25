@@ -1,6 +1,6 @@
 import { Users } from 'lucide-react';
-import { AvatarArt, initials, initialsColor } from '../lib/avatars';
-import type { AvatarRef } from '../lib/types';
+import { AvatarArt, initials, initialsColor } from './avatars';
+import type { AvatarRef } from './avatars';
 
 /** Profile or group picture: uploaded image, illustration, generated pattern, or initials. */
 export function Avatar({

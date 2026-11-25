@@ -12,6 +12,8 @@ const PostmanLanding = lazy(() => import('./apps/postman/pages/Landing'));
 const PostmanSend = lazy(() => import('./apps/postman/pages/Send'));
 const PostmanReceive = lazy(() => import('./apps/postman/pages/Receive'));
 const ChatApp = lazy(() => import('./apps/chat/pages/ChatApp'));
+const MicLanding = lazy(() => import('./apps/mic/pages/Landing'));
+const MicRoom = lazy(() => import('./apps/mic/pages/RoomPage'));
 
 interface Route {
   app?: AppDefinition;
@@ -32,6 +34,11 @@ function resolve(path: string): Route {
   if (clean === '/postman') return { app: postman, title: `${postman.name} — Transfer files directly`, element: <PostmanLanding /> };
   if (clean === '/postman/send') return { app: postman, title: `Send files · ${postman.name}`, element: <PostmanSend /> };
   if (clean === '/postman/receive') return { app: postman, title: `Receive files · ${postman.name}`, element: <PostmanReceive /> };
+
+  // Mic: landing page in the site shell, rooms full-screen.
+  if (clean === '/mic') return { app: appById('mic'), title: 'Mic — Your room. Your people. Just talk.', element: <MicLanding /> };
+  const micRoom = clean.match(/^\/room\/([A-Za-z0-9-]+)$/)?.[1];
+  if (micRoom) return { app: appById('mic'), title: 'Mic', element: <MicRoom code={micRoom} key={micRoom} />, fullscreen: true };
 
   // UR Chat: full-screen messaging app, contact links and group invite links (/join/<token>).
   if (clean === '/chat' || clean.startsWith('/chat/') || clean.startsWith('/join/')) {

@@ -7,8 +7,8 @@ import { navigate } from '../../../lib/router';
 import { engine } from '../lib/engine';
 import { normalizeLoginCode } from '../lib/identity';
 import type { AvatarRef } from '../lib/types';
-import { AvatarPicker } from './AvatarPicker';
-import { Field, inputClass } from './Modal';
+import { AvatarPicker } from '../../../ui/avatar/AvatarPicker';
+import { Field, inputClass } from '../../../ui/Modal';
 
 type Step = 'welcome' | 'login' | 'profile';
 

@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSquare, UserX, X } from 'lucide-react';
 import { Button } from '../../../ui/Button';
-import { Avatar } from '../components/Avatar';
+import { Avatar } from '../../../ui/avatar/Avatar';
 import { LoginCodeDialog } from '../components/LoginCode';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../../../lib/router';
@@ -13,7 +13,7 @@ import { SignOutDialog } from '../components/SignOutDialog';
 import { Sidebar, type Dialog } from '../components/Sidebar';
 import { useEngine, useMediaQuery } from '../hooks';
 import { engine } from '../lib/engine';
-import type { ScanTarget } from '../lib/qr';
+import type { ScanTarget } from '../../../lib/qr';
 
 let started = false;
 

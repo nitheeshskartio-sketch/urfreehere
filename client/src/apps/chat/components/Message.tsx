@@ -6,8 +6,8 @@ import { isEmojiOnly, linkify } from '../lib/linkify';
 import { extOf, sanitizeName } from '../lib/media';
 import { clockTime } from '../lib/time';
 import type { FileBody, LocationBody, StoredEvent } from '../lib/types';
-import { Avatar } from './Avatar';
-import { Menu } from './Menu';
+import { Avatar } from '../../../ui/avatar/Avatar';
+import { Menu } from '../../../ui/Menu';
 import { Ticks } from './Ticks';
 
 export function Message({

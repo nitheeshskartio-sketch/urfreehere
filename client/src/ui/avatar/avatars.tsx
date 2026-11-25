@@ -1,6 +1,12 @@
 import type { ReactElement } from 'react';
 
 /**
+ * Avatar reference: "ill:<id>" built-in illustration, "gen:<seed>" generated pattern,
+ * "data:image/…" uploaded picture, or null for initials.
+ */
+export type AvatarRef = string | null;
+
+/**
  * Built-in avatar illustrations, drawn as small inline SVGs (no image files
  * to download). Referenced as "ill:<id>"; random avatars are "gen:<seed>".
  */

@@ -8,14 +8,8 @@ export interface PublicJwk {
   y: string;
 }
 
-/**
- * Avatar reference:
- *  - "ill:<id>"  one of the built-in illustrations
- *  - "gen:<seed>" generated pattern
- *  - "data:image/…" uploaded picture (resized, small)
- *  - null        no picture (initials are shown)
- */
-export type AvatarRef = string | null;
+import type { AvatarRef } from '../../../ui/avatar/avatars';
+export type { AvatarRef };
 
 export interface Profile {
   name: string;

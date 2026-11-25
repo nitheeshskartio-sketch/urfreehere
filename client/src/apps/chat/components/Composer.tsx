@@ -5,7 +5,7 @@ import { EMOJI } from '../lib/emoji';
 import { DOCUMENT_ACCEPT, IMAGE_ACCEPT, classify } from '../lib/media';
 import type { StoredEvent } from '../lib/types';
 import { LocationPicker } from './LocationPicker';
-import { Menu } from './Menu';
+import { Menu } from '../../../ui/Menu';
 
 export function Composer({
   convId,

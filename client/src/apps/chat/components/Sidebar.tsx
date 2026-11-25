@@ -25,8 +25,8 @@ import { Button } from '../../../ui/Button';
 import { useEngine } from '../hooks';
 import type { Conversation } from '../lib/types';
 import { shortTime } from '../lib/time';
-import { Avatar } from './Avatar';
-import { Menu } from './Menu';
+import { Avatar } from '../../../ui/avatar/Avatar';
+import { Menu } from '../../../ui/Menu';
 import { Ticks } from './Ticks';
 
 export type Dialog = 'new-chat' | 'new-group' | 'join' | 'scan' | 'settings' | 'sign-out' | null;

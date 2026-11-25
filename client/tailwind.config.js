@@ -18,6 +18,7 @@ export default {
         success: { DEFAULT: c('success'), soft: c('success-soft') },
         danger: { DEFAULT: c('danger'), soft: c('danger-soft') },
         warning: { DEFAULT: c('warning'), soft: c('warning-soft') },
+        mic: c('mic'),
       },
       fontFamily: {
         sans: 'var(--font-sans)',
