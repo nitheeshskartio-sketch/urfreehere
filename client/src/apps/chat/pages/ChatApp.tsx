@@ -15,6 +15,9 @@ import type { ScanTarget } from '../lib/qr';
 
 let started = false;
 
+// Development builds only: expose the engine for debugging in the browser console.
+if (import.meta.env.DEV) (window as unknown as { __urChat: typeof engine }).__urChat = engine;
+
 /** Parses chat routes: /chat, /chat/c/<conv>, /chat/u/<userId>, /join/<token>, /chat/join/<token>. */
 function parseRoute(path: string) {
   const conv = path.match(/^\/chat\/c\/([^/]+)$/)?.[1];

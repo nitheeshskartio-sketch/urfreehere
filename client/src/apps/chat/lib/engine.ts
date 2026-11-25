@@ -277,7 +277,9 @@ export class ChatEngine {
       this.identity = (await db.get<Identity>('kv', 'identity')) ?? null;
       this.profile = (await db.get<Profile>('kv', 'profile')) ?? null;
       this.settings = { ...this.settings, ...((await db.get<Settings>('kv', 'settings')) ?? {}) };
-      this.registered = (await db.get<boolean>('kv', 'registered')) ?? false;
+      // Only an account the server confirmed it stored counts. (An older "registered" flag could be
+      // set while the server ran without MongoDB; such devices simply register again.)
+      this.registered = (await db.get<boolean>('kv', 'accountConfirmed')) ?? false;
       for (const c of await db.getAll<Contact>('contacts')) this.contacts.set(c.userId, c);
       for (const c of await db.getAll<Conversation>('convs')) this.convs.set(c.id, c);
       for (const [k, v] of Object.entries((await db.get<Record<string, Profile>>('kv', 'profiles')) ?? {})) this.profiles.set(k, v);
@@ -387,12 +389,13 @@ export class ChatEngine {
         await db.put('kv', remote, 'profile');
       }
     }
-    if (this.authMode !== 'resume') {
+    if (account && !this.registered) {
       this.registered = true;
-      await db.put('kv', true, 'registered');
+      await db.put('kv', true, 'accountConfirmed');
     }
     const wasLogin = this.authMode === 'login';
-    this.authMode = 'resume';
+    // Without a confirmed account (server running without MongoDB) keep registering on each login.
+    this.authMode = this.registered ? 'resume' : 'create';
     if (wasLogin) this.status = 'ready';
     this.notify();
     if (wasLogin) loginDone?.('found');
@@ -677,6 +680,11 @@ export class ChatEngine {
   private onPresence(userId: UserId, online: boolean) {
     const was = this.presence.get(userId);
     this.presence.set(userId, online);
+    if (online !== was) {
+      const t = this.connectTimers.get(userId);
+      if (t) window.clearTimeout(t.timer);
+      this.connectTimers.delete(userId);
+    }
     if (online) {
       // A connection attempt made while they were away can't succeed: start fresh.
       const s = this.sessions.get(userId);
@@ -725,11 +733,30 @@ export class ChatEngine {
     if (this.me < peer) {
       this.createSession(peer, true);
     } else {
-      const last = this.lastConnectAsk.get(peer) ?? 0;
-      if (Date.now() - last < 8000) return;
+      // The lower ID opens connections, so ask them to call us. If we asked very recently, or they
+      // don't call back, try again shortly instead of giving up.
+      const wait = 8000 - (Date.now() - (this.lastConnectAsk.get(peer) ?? 0));
+      if (wait > 0) return this.scheduleConnect(peer, wait + 100);
       this.lastConnectAsk.set(peer, Date.now());
       void this.signaling.signal(peer, { kind: 'connect' });
+      this.scheduleConnect(peer, 12_000);
     }
+  }
+
+  private connectTimers = new Map<UserId, { timer: number; tries: number }>();
+
+  /** Retries a connection later while the peer is online and we still have no open channel. */
+  private scheduleConnect(peer: UserId, delay: number) {
+    const cur = this.connectTimers.get(peer);
+    if (cur) window.clearTimeout(cur.timer);
+    const tries = (cur?.tries ?? 0) + 1;
+    if (tries > 15) return; // reset by the next presence change or opened connection
+    const timer = window.setTimeout(() => {
+      const s = this.sessions.get(peer);
+      if (s?.state === 'open' || !this.presence.get(peer)) return;
+      this.maybeConnect(peer);
+    }, delay);
+    this.connectTimers.set(peer, { timer, tries });
   }
 
   private createSession(peer: UserId, offerer: boolean): PeerSession {
@@ -787,6 +814,9 @@ export class ChatEngine {
 
   private onSessionOpen(s: PeerSession) {
     this.reconnect.delete(s.peerId);
+    const t = this.connectTimers.get(s.peerId);
+    if (t) window.clearTimeout(t.timer);
+    this.connectTimers.delete(s.peerId);
     s.send({ t: 'hello', v: 1, profile: this.profile });
     window.setTimeout(() => void s.detectRoute().then(() => this.notify()), 800);
     this.notify();
