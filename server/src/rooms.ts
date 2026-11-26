@@ -48,6 +48,13 @@ export class RoomRegistry {
     return this.rooms.size;
   }
 
+  /** Counts for the admin console (no codes or tokens). */
+  stats() {
+    let paired = 0;
+    for (const r of this.rooms.values()) if (r.guest) paired++;
+    return { total: this.rooms.size, waiting: this.rooms.size - paired, paired };
+  }
+
   create(socketId: string): Room | null {
     if (this.rooms.size >= this.opts.maxRooms) return null;
     let code = generateCode();

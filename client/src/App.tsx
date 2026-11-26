@@ -7,6 +7,7 @@ import { SITE } from './site/config';
 import { SiteFooter } from './site/SiteFooter';
 import { SiteHeader } from './site/SiteHeader';
 import { CoffeeFab } from './site/coffee/CoffeeFab';
+import { AnnouncementBanner } from './site/Announcement';
 
 // Apps are code-split so the home page stays small.
 const PostmanLanding = lazy(() => import('./apps/postman/pages/Landing'));
@@ -15,6 +16,7 @@ const PostmanReceive = lazy(() => import('./apps/postman/pages/Receive'));
 const ChatApp = lazy(() => import('./apps/chat/pages/ChatApp'));
 const MicLanding = lazy(() => import('./apps/mic/pages/Landing'));
 const MicRoom = lazy(() => import('./apps/mic/pages/RoomPage'));
+const AdminPage = lazy(() => import('./admin/AdminPage'));
 
 interface Route {
   app?: AppDefinition;
@@ -22,6 +24,8 @@ interface Route {
   element: JSX.Element;
   /** App-style screen without the site header and footer. */
   fullscreen?: boolean;
+  /** Admin console: no coffee button or announcement. */
+  admin?: boolean;
 }
 
 /** Old URLs from before the site had several apps. */
@@ -45,6 +49,8 @@ function resolve(path: string): Route {
   if (clean === '/chat' || clean.startsWith('/chat/') || clean.startsWith('/join/')) {
     return { app: appById('chat'), title: 'UR Chat', element: <ChatApp path={clean} />, fullscreen: true };
   }
+
+  if (clean === '/admin') return { title: `Admin console · ${SITE.name}`, element: <AdminPage />, fullscreen: true, admin: true };
 
   // Short share links for UR Postman: /r/K7MPQ2XD
   const code = clean.match(/^\/r\/([A-Za-z0-9-]+)$/)?.[1];
@@ -71,8 +77,13 @@ export default function App() {
     return (
       <>
         <Suspense fallback={<div className="h-[100dvh] bg-surface" />}>{route.element}</Suspense>
-        {/* Lifted above the chat compose box / Mic controls so it never covers them. */}
-        <CoffeeFab offset={route.app?.id === 'mic' ? 'room' : 'chat'} />
+        {!route.admin && (
+          <>
+            {/* Lifted above the chat compose box / Mic controls so it never covers them. */}
+            <CoffeeFab offset={route.app?.id === 'mic' ? 'room' : 'chat'} />
+            <AnnouncementBanner />
+          </>
+        )}
       </>
     );
   }
@@ -85,6 +96,7 @@ export default function App() {
       </main>
       <SiteFooter />
       <CoffeeFab />
+      <AnnouncementBanner />
     </div>
   );
 }

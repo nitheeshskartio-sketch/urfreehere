@@ -15,6 +15,7 @@ import {
 } from './identity.js';
 import { AccountStore, parseProfile, toPublic } from './accounts.js';
 import { InviteStore, type InvitePreview, type JoinRequest } from './invites.js';
+import { bannedIds, settings } from '../settings.js';
 
 /**
  * UR Chat signaling hub (Socket.IO namespace "/chat").
@@ -179,6 +180,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       const { userId, jwk } = pendingAuth;
       pendingAuth = null;
       const mode = p.mode === 'create' || p.mode === 'login' ? p.mode : 'resume';
+      if (bannedIds.has(userId)) return ack({ ok: false, error: 'BANNED' });
 
       let account = null;
       if (accountsConfigured()) {
@@ -187,6 +189,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
           if (mode === 'create') {
             const profile = parseProfile(p.profile);
             if (!profile) return ack({ ok: false, error: 'INVALID_PROFILE' });
+            if (!settings.signupsOpen && !(await accounts.get(userId))) return ack({ ok: false, error: 'SIGNUPS_CLOSED' });
             account = toPublic(await accounts.upsert(userId, jwk, profile));
           } else {
             const doc = await accounts.get(userId);
@@ -447,5 +450,18 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     for (const [g, set] of groupMembers) if (!set.size) groupMembers.delete(g);
   }, 60_000).unref();
 
-  return { onlineCount: () => sessions.size };
+  return {
+    onlineCount: () => sessions.size,
+    isOnline: (userId: string) => sessions.has(userId),
+    onlineGroups: () => groupMembers.size,
+    inviteCount: () => invites.count(),
+    /** Admin: tells the device its account was deleted or suspended, then disconnects it. */
+    kick(userId: string, reason: 'deleted' | 'banned') {
+      const s = sessions.get(userId);
+      if (!s) return false;
+      s.socket.emit('admin:removed', { reason });
+      s.socket.disconnect(true);
+      return true;
+    },
+  };
 }

@@ -76,6 +76,9 @@ export const config = {
     signalsPerSecond: int('RATE_SIGNALS_PER_SECOND', 50),
   },
 
+  /** Password for the admin console (/admin). Empty disables it. Never sent to browsers. */
+  adminPassword: env.ADMIN_PASSWORD || '',
+
   chat: {
     /** MongoDB for UR Chat accounts (profiles only). Leave empty to run without accounts. */
     mongoUri: env.MONGODB_URI || '',

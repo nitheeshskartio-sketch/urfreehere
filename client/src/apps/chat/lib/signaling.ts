@@ -30,7 +30,7 @@ export interface InviteResult {
   reason?: string;
 }
 
-export type SignalingStatus = 'connecting' | 'online' | 'offline' | 'replaced' | 'missing';
+export type SignalingStatus = 'connecting' | 'online' | 'offline' | 'replaced' | 'missing' | 'banned' | 'signups-closed';
 
 export type AuthMode = 'create' | 'login' | 'resume';
 
@@ -67,6 +67,8 @@ export class ChatSignaling {
   private groups = new Set<string>();
   private authed = false;
   private replaced = false;
+  /** The site admin deleted this account (rather than inactivity). */
+  removedByAdmin = false;
   ice: IceConfig | null = null;
 
   constructor(
@@ -92,6 +94,14 @@ export class ChatSignaling {
       this.replaced = true;
       this.socket.io.opts.reconnection = false;
       handlers.onStatus('replaced');
+    });
+    this.socket.on('admin:removed', (p: { reason?: string }) => {
+      this.authed = false;
+      this.replaced = true; // don't report a plain "offline" for the disconnect that follows
+      this.socket.io.opts.reconnection = false;
+      if (p?.reason === 'banned') return handlers.onStatus('banned');
+      this.removedByAdmin = true;
+      handlers.onStatus('missing');
     });
     this.socket.on('signal', (p: { from: UserId; data: SignalData }) => handlers.onSignal(p.from, p.data));
     this.socket.on('presence', (p: { userId: UserId; online: boolean }) => handlers.onPresence(p.userId, p.online));
@@ -150,6 +160,12 @@ export class ChatSignaling {
         this.socket.io.opts.reconnection = false;
         this.socket.disconnect();
         this.handlers.onStatus('missing');
+        return;
+      }
+      if (code === 'BANNED' || code === 'SIGNUPS_CLOSED') {
+        this.socket.io.opts.reconnection = false;
+        this.socket.disconnect();
+        this.handlers.onStatus(code === 'BANNED' ? 'banned' : 'signups-closed');
         return;
       }
       this.handlers.onStatus('offline');

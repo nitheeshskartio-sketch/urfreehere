@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'ROOM_FULL'
   | 'RATE_LIMITED'
   | 'SERVER_BUSY'
+  | 'PAUSED'
   | 'SIGNALING_UNAVAILABLE'
   | 'SENDER_DISCONNECTED'
   | 'RECEIVER_DISCONNECTED'
@@ -53,6 +54,10 @@ export const ERROR_COPY: Record<ErrorCode, { title: string; message: string }> =
   SERVER_BUSY: {
     title: 'Service is busy',
     message: 'Please try again in a moment.',
+  },
+  PAUSED: {
+    title: 'Sending is paused',
+    message: 'The site admin has paused new transfers for now. Please try again later.',
   },
   SIGNALING_UNAVAILABLE: {
     title: "Can't reach the service",

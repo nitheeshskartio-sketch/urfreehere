@@ -4,6 +4,7 @@ import type { Namespace, Server, Socket } from 'socket.io';
 import { buildIceConfig } from '../ice.js';
 import { TokenBucket, WindowLimiter } from '../rateLimit.js';
 import { EXPIRY_CHOICES, PARTICIPANT_CHOICES, micConfig, publicMicConfig } from './config.js';
+import { settings } from '../settings.js';
 
 /**
  * Mic signaling hub (Socket.IO namespace "/mic").
@@ -263,6 +264,7 @@ export function attachMic(io: Server, app: Express, opts: MicHubOptions) {
       const ack = ackOf(ackFn);
       if (!createLimiter.take(ip)) return ack({ ok: false, error: 'RATE_LIMITED' });
       if (rooms.size >= micConfig.maxRooms) return ack({ ok: false, error: 'SERVER_BUSY' });
+      if (!settings.micCreateEnabled) return ack({ ok: false, error: 'DISABLED' });
       const p = (payload ?? {}) as Record<string, unknown>;
       const name = str(p.name, 60)?.trim() || 'Voice room';
       const description = str(p.description ?? '', 300)?.trim() ?? '';
@@ -546,7 +548,32 @@ export function attachMic(io: Server, app: Express, opts: MicHubOptions) {
     connectLimiter.sweep();
   }, 5_000).unref();
 
-  return { roomCount: () => rooms.size };
+  return {
+    roomCount: () => rooms.size,
+    /** Admin console: every live room with who is in it (no audio ever passes through here). */
+    adminRooms: () =>
+      [...rooms.values()].map((room) => ({
+        ...roomView(room),
+        participants: [...room.participants.values()].map((p) => participantView(p, room)),
+      })),
+    adminClose(code: string) {
+      const room = findRoom(normalizeRoomCode(code));
+      if (!room) return false;
+      endRoom(room, 'closed');
+      return true;
+    },
+    adminRemove(code: string, pid: string) {
+      const room = findRoom(normalizeRoomCode(code));
+      const target = room?.participants.get(pid);
+      if (!room || !target) return false;
+      if (target.socketId) {
+        nsp.to(target.socketId).emit('kicked', { reason: 'removed', banMinutes: 0 });
+        nsp.sockets.get(target.socketId)?.leave(room.id);
+      }
+      removeParticipant(room, pid, 'removed');
+      return true;
+    },
+  };
 }
 
 export { PARTICIPANT_CHOICES };

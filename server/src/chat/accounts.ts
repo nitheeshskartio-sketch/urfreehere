@@ -122,6 +122,80 @@ export class AccountStore {
     return this.col.find({ _id: { $in: userIds } }).limit(100).toArray();
   }
 
+  // ---------------------------------------------------------------- admin
+
+  private get db() {
+    return this.client.db(this.col.dbName);
+  }
+
+  private get bans() {
+    return this.db.collection<{ _id: string; reason: string; name: string | null; at: Date }>('chat_bans');
+  }
+
+  private get site() {
+    return this.db.collection<{ _id: string; value: unknown }>('site_settings');
+  }
+
+  /** Accounts for the admin console, newest activity first. Searches name, status and ID. */
+  async list(q: string, skip: number, limit: number, sort: 'active' | 'created' | 'name') {
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const filter = q ? { $or: [{ name: { $regex: esc, $options: 'i' } }, { status: { $regex: esc, $options: 'i' } }, { _id: { $regex: esc.replace(/-/g, ''), $options: 'i' } }] } : {};
+    const order: Record<string, 1 | -1> = sort === 'name' ? { name: 1 } : sort === 'created' ? { createdAt: -1 } : { lastActiveAt: -1 };
+    const [items, total] = await Promise.all([this.col.find(filter).sort(order).skip(skip).limit(limit).toArray(), this.col.countDocuments(filter)]);
+    return { items, total };
+  }
+
+  async stats() {
+    const now = Date.now();
+    const since = (ms: number) => new Date(now - ms);
+    const [total, new24h, new7d, active24h] = await Promise.all([
+      this.col.estimatedDocumentCount(),
+      this.col.countDocuments({ createdAt: { $gte: since(86_400_000) } }),
+      this.col.countDocuments({ createdAt: { $gte: since(7 * 86_400_000) } }),
+      this.col.countDocuments({ lastActiveAt: { $gte: since(86_400_000) } }),
+    ]);
+    return { total, new24h, new7d, active24h };
+  }
+
+  async remove(userId: string) {
+    return (await this.col.deleteOne({ _id: userId })).deletedCount === 1;
+  }
+
+  /** Deletes accounts not active for `days` days. Returns how many. */
+  async removeInactive(days: number) {
+    return (await this.col.deleteMany({ lastActiveAt: { $lt: new Date(Date.now() - days * 86_400_000) } })).deletedCount;
+  }
+
+  async adminEdit(userId: string, patch: { name?: string; status?: string; avatar?: null }) {
+    const now = new Date();
+    return this.col.findOneAndUpdate({ _id: userId }, { $set: { ...patch, updatedAt: now } }, { returnDocument: 'after' });
+  }
+
+  /** Resets the inactivity countdown. */
+  async keepAlive(userId: string) {
+    return (await this.col.updateOne({ _id: userId }, { $set: { lastActiveAt: new Date() } })).matchedCount === 1;
+  }
+
+  async listBans() {
+    return this.bans.find().sort({ at: -1 }).limit(500).toArray();
+  }
+
+  async ban(userId: string, reason: string, name: string | null) {
+    await this.bans.updateOne({ _id: userId }, { $set: { reason, name, at: new Date() } }, { upsert: true });
+  }
+
+  async unban(userId: string) {
+    await this.bans.deleteOne({ _id: userId });
+  }
+
+  async loadSetting<T>(key: string): Promise<T | null> {
+    return ((await this.site.findOne({ _id: key }))?.value as T) ?? null;
+  }
+
+  async saveSetting(key: string, value: unknown) {
+    await this.site.updateOne({ _id: key }, { $set: { value } }, { upsert: true });
+  }
+
   close() {
     return this.client.close();
   }

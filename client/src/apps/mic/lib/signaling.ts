@@ -117,5 +117,6 @@ export const ERROR_COPY: Record<string, { title: string; message: string }> = {
   RATE_LIMITED: { title: 'Too many attempts', message: 'Please wait a few minutes and try again.' },
   UNREACHABLE: { title: "Can't reach Mic", message: 'Check your internet connection and try again.' },
   SERVER_BUSY: { title: 'Mic is busy', message: 'Please try again in a moment.' },
+  DISABLED: { title: 'New rooms are paused', message: 'The site admin has paused creating Mic rooms. Existing rooms still work. Try again later.' },
   INVALID_LIMIT: { title: 'Participant limit not allowed', message: 'Choose a smaller participant limit.' },
 };

@@ -118,6 +118,29 @@ export default function ChatApp({ path }: { path: string }) {
     return null;
   }
   if (route.login) return <SignedInNotice onSignOut={() => setDialog('sign-out')} dialog={dialog} onCloseDialog={() => setDialog(null)} />;
+  if (e.blocked) {
+    const banned = e.blocked === 'banned';
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
+        <div className="max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card" role="alert">
+          <span className={`mx-auto flex size-12 items-center justify-center rounded-full ${banned ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'}`}>
+            <UserX className="size-6" />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold">{banned ? 'This account has been suspended' : 'New sign-ups are paused'}</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            {banned
+              ? "The site admin suspended this chat ID, so it can't connect. Your chats are still on this device."
+              : "UR Chat isn't accepting new accounts right now. Your profile is saved on this device. Try again later."}
+          </p>
+          {!banned && (
+            <Button className="mt-5 w-full" onClick={() => engine.retryConnection()}>
+              Try again
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (e.status === 'expired') {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
@@ -127,7 +150,9 @@ export default function ChatApp({ path }: { path: string }) {
           </span>
           <h1 className="mt-4 text-lg font-semibold">Your account was removed</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            UR Chat accounts are removed after 7 days without activity. Your chats are still on this device. Reactivate to keep the same chat ID and profile.
+            {e.removedByAdmin
+              ? 'Your account was removed by the site admin. Your chats are still on this device. Reactivate to keep the same chat ID and profile.'
+              : 'UR Chat accounts are removed after 7 days without activity. Your chats are still on this device. Reactivate to keep the same chat ID and profile.'}
           </p>
           <div className="mt-6 flex flex-col gap-2">
             <Button onClick={() => engine.reactivate()}>Reactivate my account</Button>

@@ -5,7 +5,7 @@ export interface GifItem {
   full: { url: string; width: number; height: number };
 }
 
-export type GifError = 'LIMIT_REACHED' | 'UNAUTHORIZED' | 'NOT_CONFIGURED' | 'UPSTREAM' | 'OFFLINE';
+export type GifError = 'LIMIT_REACHED' | 'UNAUTHORIZED' | 'NOT_CONFIGURED' | 'DISABLED' | 'UPSTREAM' | 'OFFLINE';
 
 export class GifLoadError extends Error {
   constructor(
@@ -47,6 +47,8 @@ export function gifErrorText(err: GifLoadError): { title: string; message: strin
     }
     case 'UNAUTHORIZED':
       return { title: 'GIFs unavailable', message: "The GIF feature isn't available: the GIPHY API key wasn't accepted (unauthorized)." };
+    case 'DISABLED':
+      return { title: 'GIFs are switched off', message: 'The site admin has turned off GIFs and stickers for now. Emoji still work.' };
     case 'NOT_CONFIGURED':
       return { title: 'GIFs not set up', message: "GIFs aren't enabled on this server yet." };
     case 'OFFLINE':

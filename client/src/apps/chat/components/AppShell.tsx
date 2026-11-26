@@ -1,5 +1,7 @@
 import { ArrowLeftRight, House, MessageSquare, Mic, Search, Settings, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { AdminLoginDialog } from '../../../admin/AdminLogin';
+import { navigate } from '../../../lib/router';
 import { Link } from '../../../site/Link';
 import { SiteMark } from '../../../site/Logo';
 import { Avatar } from '../../../ui/avatar/Avatar';
@@ -10,13 +12,33 @@ import { useEngine } from '../hooks';
 export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: (q: string) => void; onProfile: () => void }) {
   const e = useEngine();
   const me = e.profile!;
+  // Double-click the logo for the admin console; a single click still goes home.
+  const [adminOpen, setAdminOpen] = useState(false);
+  const clickTimer = useRef<number>();
+  const onLogo = (ev: MouseEvent<HTMLAnchorElement>) => {
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) return;
+    ev.preventDefault();
+    window.clearTimeout(clickTimer.current);
+    if (ev.detail >= 2) return setAdminOpen(true);
+    if (ev.detail === 0) return navigate('/'); // keyboard
+    clickTimer.current = window.setTimeout(() => navigate('/'), 280);
+  };
   const status = e.net === 'online' ? 'Available' : e.net === 'connecting' ? 'Connecting…' : e.net === 'replaced' ? 'Open in another tab' : 'Offline';
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 bg-rail px-3 text-ink">
-      <Link href="/" className="flex shrink-0 items-center gap-2 rounded-md md:w-[56px] md:justify-center lg:w-auto" aria-label="UR Free Here home">
+      {adminOpen && (
+        <AdminLoginDialog
+          onClose={() => setAdminOpen(false)}
+          onSuccess={() => {
+            setAdminOpen(false);
+            navigate('/admin');
+          }}
+        />
+      )}
+      <a href="/" onClick={onLogo} className="flex shrink-0 select-none items-center gap-2 rounded-md md:w-[56px] md:justify-center lg:w-auto" aria-label="UR Free Here home">
         <SiteMark className="size-6" />
         <span className="text-[14px] font-semibold md:hidden lg:inline">UR Chat</span>
-      </Link>
+      </a>
       <div className="relative mx-auto hidden w-full max-w-[560px] md:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
         <input

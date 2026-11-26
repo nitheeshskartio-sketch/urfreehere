@@ -7,6 +7,8 @@ import { AccountStore } from './chat/accounts.js';
 import { attachChat } from './chat/hub.js';
 import { attachMic } from './mic/hub.js';
 import { attachGif } from './gif.js';
+import { attachAdmin } from './admin.js';
+import { settings } from './settings.js';
 import { config } from './config.js';
 import { buildIceConfig } from './ice.js';
 import { TokenBucket, WindowLimiter } from './rateLimit.js';
@@ -114,13 +116,14 @@ function leaveCurrentRoom(socket: Socket) {
 }
 
 // --- UR Chat (namespace /chat + /api/chat) -------------------------------
+const accountStore = config.chat.mongoUri
+  ? AccountStore.connect(config.chat.mongoUri, config.chat.mongoDb, config.chat.inactiveDays)
+  : null;
 const chat = attachChat(io, app, {
   clientIp,
   dataFile: config.chat.dataFile,
   production: config.isProduction,
-  accounts: config.chat.mongoUri
-    ? AccountStore.connect(config.chat.mongoUri, config.chat.mongoDb, config.chat.inactiveDays)
-    : null,
+  accounts: accountStore,
 });
 
 // --- GIPHY proxy for UR Chat (key stays on the server) --------------------
@@ -128,6 +131,17 @@ attachGif(app, { production: config.isProduction });
 
 // --- Mic voice rooms (namespace /mic + /api/mic) -------------------------
 const mic = attachMic(io, app, { clientIp, production: config.isProduction });
+
+// --- Admin console API (password only in the server environment) ---------
+attachAdmin(app, {
+  password: config.adminPassword,
+  production: config.isProduction,
+  inactiveDays: config.chat.inactiveDays,
+  accounts: accountStore,
+  chat,
+  mic,
+  postman: rooms,
+});
 
 // --- Static client + SPA fallback (after all API routes) ------------------
 if (config.serveClient && existsSync(config.clientDist)) {
@@ -153,6 +167,7 @@ io.on('connection', (socket) => {
   socket.on('room:create', (_payload: unknown, ackFn: unknown) => {
     const ack = ackOf(ackFn);
     if (!createLimiter.take(ip)) return ack({ ok: false, error: 'RATE_LIMITED' });
+    if (!settings.postmanEnabled) return ack({ ok: false, error: 'PAUSED' });
     leaveCurrentRoom(socket);
     const room = rooms.create(socket.id);
     if (!room) return ack({ ok: false, error: 'SERVER_BUSY' });

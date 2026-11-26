@@ -221,10 +221,14 @@ export class ChatEngine {
   showLoginCode = false;
   private authMode: AuthMode = 'resume';
   private registered = false;
-  private loginWaiter: ((r: 'found' | 'not-found') => void) | null = null;
+  private loginWaiter: ((r: 'found' | 'not-found' | 'offline') => void) | null = null;
   /** Public keys from the account directory, verified against the user ID. */
   private directoryKeys = new Map<UserId, PublicJwk>();
   net: SignalingStatus = 'connecting';
+  /** Set when the server refuses this account: suspended by the admin, or sign-ups paused. */
+  blocked: 'banned' | 'signups-closed' | null = null;
+  /** The account was deleted by the site admin (not removed for inactivity). */
+  removedByAdmin = false;
   identity: Identity | null = null;
   profile: Profile | null = null;
   settings: Settings = {
@@ -433,6 +437,13 @@ export class ChatEngine {
     this.notify();
   }
 
+  /** Try connecting again (e.g. after the admin reopened sign-ups). */
+  retryConnection() {
+    this.blocked = null;
+    this.notify();
+    this.restartSignaling();
+  }
+
   private restartSignaling() {
     this.signaling?.close();
     this.signaling = null;
@@ -532,7 +543,21 @@ export class ChatEngine {
       {
       onAuthed: (account, enabled) => void this.onAuthed(account, enabled),
       onStatus: (s) => {
-        if (s === 'missing') return this.onAccountMissing();
+        if (s === 'missing') {
+          this.removedByAdmin = !!this.signaling?.removedByAdmin;
+          return this.onAccountMissing();
+        }
+        if (s === 'banned' || s === 'signups-closed') {
+          this.blocked = s;
+          this.net = 'offline';
+          const waiter = this.loginWaiter;
+          this.loginWaiter = null;
+          waiter?.('offline');
+          for (const sess of [...this.sessions.values()]) sess.close('expired');
+          this.notify();
+          return;
+        }
+        this.blocked = null;
         this.net = s;
         if (s === 'online') {
           this.refreshWatch();

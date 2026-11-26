@@ -1,5 +1,6 @@
 import type { Express } from 'express';
 import { WindowLimiter } from './rateLimit.js';
+import { settings } from './settings.js';
 
 /**
  * GIPHY proxy for UR Chat's GIF and sticker picker.
@@ -29,6 +30,26 @@ const calls: number[] = []; // timestamps of upstream calls in the last hour
 const cache = new Map<string, { at: number; items: GifItem[] }>();
 let unauthorizedUntil = 0;
 let upstreamLimitedUntil = 0;
+
+/** Admin console: usage of the shared hourly budget. */
+export function gifStats() {
+  const now = Date.now();
+  return {
+    configured: !!KEY,
+    used: HOURLY_LIMIT - budgetLeft(now),
+    limit: HOURLY_LIMIT,
+    cached: cache.size,
+    unauthorized: unauthorizedUntil > now,
+    upstreamLimited: upstreamLimitedUntil > now,
+  };
+}
+
+/** Admin console: forget the counted calls and cached errors (GIPHY's own limit still applies). */
+export function resetGifBudget() {
+  calls.length = 0;
+  unauthorizedUntil = 0;
+  upstreamLimitedUntil = 0;
+}
 
 function budgetLeft(now: number) {
   while (calls.length && now - calls[0] > HOUR) calls.shift();
@@ -105,6 +126,7 @@ export function attachGif(app: Express, opts: { production: boolean }) {
   app.get('/api/gif/:kind', async (req, res) => {
     const kind = req.params.kind === 'stickers' ? 'stickers' : req.params.kind === 'gifs' ? 'gifs' : null;
     if (!kind) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!settings.gifsEnabled) return res.status(503).json({ error: 'DISABLED' });
     const q = String(req.query.q ?? '').trim().replace(/\s+/g, ' ').slice(0, 50);
     if (!perIp.take(req.ip ?? 'unknown')) return res.status(429).json({ error: 'LIMIT_REACHED', retryAfter: 600 });
     const r = await fetchGiphy(kind, q);

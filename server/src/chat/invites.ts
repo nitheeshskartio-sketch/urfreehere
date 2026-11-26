@@ -109,6 +109,10 @@ export class InviteStore {
   }
 
   /** Looks up by token or by short code. */
+  count() {
+    return this.byToken.size;
+  }
+
   find(key: string): Invite | null {
     const token = this.byCode.get(key.toUpperCase().replace(/[^A-Z0-9]/g, '')) ?? key;
     return this.byToken.get(token) ?? null;
