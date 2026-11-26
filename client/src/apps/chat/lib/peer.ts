@@ -2,19 +2,40 @@ import { keyMatchesId, sign, verify, type Identity } from './identity';
 import type { IceConfig, SignalData } from './signaling';
 import type { PublicJwk, UserId } from './types';
 
-export type Route = 'direct' | 'relay';
+/** direct: peer to peer · relay: through a TURN server · server: forwarded by our signaling server */
+export type Route = 'direct' | 'relay' | 'server';
+
+/** What the engine needs from a connection to a peer, WebRTC or server relay. */
+export interface ChatSession {
+  readonly peerId: UserId;
+  state: 'connecting' | 'open' | 'closed';
+  route: Route | null;
+  peerKey: PublicJwk | null;
+  readonly createdAt: number;
+  /** Conversations we've already asked this peer to sync during this connection. */
+  readonly asked: Set<string>;
+  /** Forwarded by the UR Free Here server instead of a WebRTC connection. */
+  readonly viaServer: boolean;
+  /** Largest binary chunk to send in one message. */
+  readonly maxChunk: number;
+  send(msg: Record<string, unknown>): boolean;
+  close(reason: string): void;
+  handleSignal(data: SignalData): Promise<void>;
+  detectRoute(): Promise<Route | null>;
+  openFileChannel(label: string): RTCDataChannel;
+}
 
 export interface SessionCallbacks {
   signal(data: SignalData): void;
-  onOpen(session: PeerSession): void;
-  onMessage(session: PeerSession, msg: Record<string, unknown>): void;
-  onClose(session: PeerSession, reason: string): void;
-  onFileChannel(session: PeerSession, channel: RTCDataChannel): void;
+  onOpen(session: ChatSession): void;
+  onMessage(session: ChatSession, msg: Record<string, unknown>): void;
+  onClose(session: ChatSession, reason: string): void;
+  onFileChannel(session: ChatSession, channel: RTCDataChannel): void;
   /** First time we learn the peer's verified public key. */
-  onPeerKey(session: PeerSession, jwk: PublicJwk): void;
+  onPeerKey(session: ChatSession, jwk: PublicJwk): void;
 }
 
-const CONNECT_TIMEOUT = 30_000;
+const CONNECT_TIMEOUT = 15_000;
 const DISCONNECT_GRACE = 8_000;
 /** Larger control messages are split so they fit every browser's SCTP limit. */
 const FRAME = 48 * 1024;
@@ -36,8 +57,9 @@ function fingerprints(sdp: string): string {
  * (which is derived from that key). A signaling server that swapped the SDP
  * to insert itself would fail this check.
  */
-export class PeerSession {
+export class PeerSession implements ChatSession {
   readonly pc: RTCPeerConnection;
+  readonly viaServer = false;
   ctl: RTCDataChannel | null = null;
   state: 'connecting' | 'open' | 'closed' = 'connecting';
   route: Route | null = null;
@@ -204,6 +226,11 @@ export class PeerSession {
     } catch {
       return false;
     }
+  }
+
+  get maxChunk() {
+    const max = this.pc.sctp?.maxMessageSize;
+    return max && Number.isFinite(max) ? Math.max(16 * 1024, Math.min(64 * 1024, max)) : 16 * 1024;
   }
 
   openFileChannel(label: string): RTCDataChannel {

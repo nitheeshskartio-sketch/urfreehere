@@ -13,7 +13,8 @@ import {
 } from './groups';
 import { createIdentity, identityFromCode, isPublicJwk, keyMatchesId, sign, signable, verify, type Identity } from './identity';
 import { AUTO_DOWNLOAD_LIMIT, MAX_FILE_SIZE, classify, imageInfo, isRealImage, mimeFor, sanitizeName, validateOutgoing, type FileClass } from './media';
-import { PeerSession } from './peer';
+import { PeerSession, type ChatSession } from './peer';
+import { RelaySession } from './relay';
 import { ChatSignaling, lookupInvite, type AccountInfo, type AccountLinks, type AuthMode, type InviteLookup, type JoinRequest, type SignalData, type SignalingStatus } from './signaling';
 import type {
   ChatEvent,
@@ -34,7 +35,6 @@ import type {
   StoredEvent,
   UserId,
 } from './types';
-import type { ConnectionView } from './connection';
 
 const MAX_SESSIONS = 40;
 const MAX_STRANGER_SESSIONS = 6;
@@ -74,15 +74,8 @@ export type EngineStatus = 'loading' | 'onboarding' | 'ready' | 'expired' | 'uns
 
 /** Failed connection attempts (while the person is online) before showing "can't connect". */
 const UNREACHABLE_AFTER = 2;
-const CONNECTION_SETTLE_MS = 8000;
-const CONNECTION_MIN_TEXTS = 6;
-const CONNECTION_MIN_NEW = 3;
-const CONNECTION_WINDOW = 40;
-
-function pickView(v: ConnectionView): ConnectionView {
-  return { available: !!v.available, state: v.state ?? null };
-}
-
+/** After falling back to the server relay, try a direct connection again this much later. */
+const RELAY_RETRY_DIRECT_MS = 30 * 60 * 1000;
 export function dmId(a: UserId, b: UserId): ConvId {
   return a < b ? `dm:${a}:${b}` : `dm:${b}:${a}`;
 }
@@ -101,7 +94,7 @@ const PURGE_AFTER_MISSING_MS = 24 * 60 * 60 * 1000;
 
 /** Real messages (not group operations, reactions or deletions). */
 export function isMessage(e: { kind: EventKind }) {
-  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete';
+  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood';
 }
 
 /** Applies text size, spacing and clock settings to the page. */
@@ -180,6 +173,9 @@ function validEvent(e: unknown): e is ChatEvent {
       return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
     case 'delete':
       return typeof b.target === 'string' && b.target.length <= 64;
+    case 'mood':
+      // One emoji (possibly with modifiers), or null to clear it.
+      return b.e === null || (typeof b.e === 'string' && b.e.length <= 16 && /\p{Extended_Pictographic}/u.test(b.e) && !/[\p{L}\p{N}<>]/u.test(b.e));
     case 'gif':
       return (
         typeof b.id === 'string' &&
@@ -270,20 +266,22 @@ export class ChatEngine {
   convs = new Map<ConvId, Conversation>();
   groups = new Map<string, GroupState>();
   presence = new Map<UserId, boolean>();
-  sessions = new Map<UserId, PeerSession>();
+  sessions = new Map<UserId, ChatSession>();
+  /** Peers we couldn't reach directly: use the server relay until this time, then try direct again. */
+  private relayPreferred = new Map<UserId, number>();
   typing = new Map<ConvId, Map<UserId, number>>();
   transfers = new Map<string, FileTransferState>();
   invites = new Map<string, LocalInvite[]>();
   toasts: Toast[] = [];
   activeConv: ConvId | null = null;
-  /** Connection (AI emotional connection) per direct-chat peer, as last reported by the server. */
-  connections = new Map<UserId, ConnectionView>();
 
   private events = new Map<ConvId, StoredEvent[]>();
   /** message id -> reactions by author (latest wins) */
   private reactions = new Map<string, Map<UserId, { r: Reaction | null; ts: number }>>();
   /** message id -> who deleted it for everyone, and when */
   private revocations = new Map<string, { author: UserId; ts: number }>();
+  /** conversation -> emoji each person set for it (latest wins) */
+  private moods = new Map<ConvId, Map<UserId, { e: string | null; ts: number }>>();
   private missingSince = new Map<UserId, number>();
   private byId = new Map<string, StoredEvent>();
   private byFile = new Map<string, StoredEvent>();
@@ -299,8 +297,6 @@ export class ChatEngine {
   private typingSent = new Map<ConvId, number>();
   private provisional = new Set<ConvId>();
   private groupLocks = new Map<string, Promise<void>>();
-  private connLoading = new Set<UserId>();
-  private connTimers = new Map<UserId, number>();
   private signaling: ChatSignaling | null = null;
   private listeners = new Set<() => void>();
   private writeQueue = new Map<string, { store: 'events' | 'convs' | 'contacts'; value: unknown }>();
@@ -583,8 +579,6 @@ export class ChatEngine {
       this.ensureSelfChat();
     }
     this.queueLinks(0);
-    // Updates may have been missed while offline: views reload when next shown.
-    this.connections.clear();
     this.notify();
     if (wasLogin) loginDone?.('found');
     void this.refreshDirectory();
@@ -670,7 +664,7 @@ export class ChatEngine {
       onPresence: (userId, online) => this.onPresence(userId, online),
       onJoinRequest: (req) => void this.onJoinRequest(req),
       onInviteResult: (r) => this.onInviteResult(r.groupId, r.accepted, r.by, r.reason),
-      onConnection: (peerId, view) => this.onConnection(peerId, view),
+      onRelay: (from, data) => this.onRelay(from, data),
       },
       () => ({ mode: this.authMode, profile: this.profile, deviceId: this.deviceId }),
     );
@@ -719,6 +713,11 @@ export class ChatEngine {
       if (!m) this.reactions.set(String(b.target), (m = new Map()));
       const cur = m.get(e.author);
       if (!cur || cur.ts <= e.ts) m.set(e.author, { r: (b.r as Reaction | null) ?? null, ts: e.ts });
+    } else if (e.kind === 'mood' && !e.local.deleted) {
+      let m = this.moods.get(e.conv);
+      if (!m) this.moods.set(e.conv, (m = new Map()));
+      const cur = m.get(e.author);
+      if (!cur || cur.ts <= e.ts) m.set(e.author, { e: (b.e as string | null) ?? null, ts: e.ts });
     } else if (e.kind === 'delete' && !e.local.deleted) {
       this.revocations.set(String(b.target), { author: e.author, ts: e.ts });
       const target = this.byId.get(String(b.target));
@@ -763,7 +762,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete');
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -973,6 +972,9 @@ export class ChatEngine {
       const r = this.reconnect.get(userId);
       if (r?.timer) window.clearTimeout(r.timer);
       this.reconnect.delete(userId);
+      // The server can't forward to someone who's offline.
+      const s = this.sessions.get(userId);
+      if (s?.viaServer) s.close('offline');
     }
     this.notify();
   }
@@ -1002,6 +1004,8 @@ export class ChatEngine {
     if (this.presence.get(peer) === false) return;
     const existing = this.sessions.get(peer);
     if (existing?.state === 'open') return;
+    // A direct connection to them failed recently: go straight to the server relay.
+    if ((this.relayPreferred.get(peer) ?? 0) > Date.now()) return this.startRelay(peer);
     // Replace attempts that have been stuck for a while.
     if (existing?.state === 'connecting') {
       if (Date.now() - existing.createdAt < 10_000) return;
@@ -1023,8 +1027,9 @@ export class ChatEngine {
 
   private connectTimers = new Map<UserId, { timer: number; tries: number }>();
 
-  /** "Try again": forget earlier failures and connect now. */
+  /** "Try again": forget earlier failures and connect now (directly first). */
   retryPeer(peer: UserId) {
+    this.relayPreferred.delete(peer);
     const r = this.reconnect.get(peer);
     if (r?.timer) window.clearTimeout(r.timer);
     this.reconnect.delete(peer);
@@ -1105,21 +1110,27 @@ export class ChatEngine {
     if (existing && existing.state !== 'closed') await existing.handleSignal(data);
   }
 
-  private onSessionOpen(s: PeerSession) {
+  private onSessionOpen(s: ChatSession) {
     this.reconnect.delete(s.peerId);
     const t = this.connectTimers.get(s.peerId);
     if (t) window.clearTimeout(t.timer);
     this.connectTimers.delete(s.peerId);
-    s.send({ t: 'hello', v: 1, profile: this.profile });
+    // Over the server relay there's no signed handshake, so include the key (checked against the chat ID).
+    s.send({ t: 'hello', v: 1, profile: this.profile, ...(s.viaServer ? { pub: this.identity?.publicJwk } : {}) });
     window.setTimeout(() => void s.detectRoute().then(() => this.notify()), 800);
     this.notify();
   }
 
-  private onSessionClose(s: PeerSession, reason: string) {
+  private onSessionClose(s: ChatSession, reason: string) {
     if (this.sessions.get(s.peerId) === s) this.sessions.delete(s.peerId);
     for (const req of this.fileRequests.values()) if (req.peer === s.peerId) req.abort.abort();
     this.notify();
     if (reason === 'replaced' || reason === 'restart' || this.isBlocked(s.peerId)) return;
+    // A direct connection couldn't be made (strict NAT, no TURN): carry on through the server relay.
+    if (!s.viaServer && (reason === 'timeout' || reason === 'failed' || reason === 'offer-failed') && this.presence.get(s.peerId) && this.signaling?.online) {
+      this.relayPreferred.set(s.peerId, Date.now() + RELAY_RETRY_DIRECT_MS);
+      return this.startRelay(s.peerId);
+    }
     // Reconnect with backoff while the peer is still online and relevant.
     if (this.presence.get(s.peerId) && this.relevantPeers().has(s.peerId)) {
       const r = this.reconnect.get(s.peerId) ?? { attempts: 0 };
@@ -1131,6 +1142,44 @@ export class ChatEngine {
     }
   }
 
+  private newRelay(peer: UserId): RelaySession {
+    const sig = this.signaling!;
+    const relay = new RelaySession(peer, (frame) => sig.relay(peer, frame), {
+      onMessage: (s, msg) => void this.onPeerMessage(s, msg),
+      onClose: (s, reason) => this.onSessionClose(s, reason),
+      onFileChannel: (s, ch) => this.onFileChannel(s, ch),
+      onPeerKey: (_s, jwk) => this.learnKey(peer, jwk),
+    });
+    relay.peerKey = this.knownKey(peer) ?? null;
+    const old = this.sessions.get(peer);
+    if (old && old !== relay) old.close('restart');
+    this.sessions.set(peer, relay);
+    return relay;
+  }
+
+  /** Talk to a peer through the server because a direct connection isn't possible. */
+  private startRelay(peer: UserId) {
+    if (!this.identity || !this.signaling?.online || this.isBlocked(peer) || this.presence.get(peer) === false) return;
+    if (this.sessions.get(peer)?.state === 'open') return;
+    this.onSessionOpen(this.newRelay(peer));
+  }
+
+  /** A relayed frame arrived: the sender couldn't reach us directly either. */
+  private onRelay(from: UserId, data: unknown) {
+    if (!this.identity || from === this.me || this.isBlocked(from) || !this.signaling?.online) return;
+    let s = this.sessions.get(from);
+    if (!(s instanceof RelaySession) || s.state !== 'open') {
+      if (!this.relevantPeers().has(from) && !s) {
+        const strangers = [...this.sessions.keys()].filter((u) => !this.relevantPeers().has(u)).length;
+        if (strangers >= MAX_STRANGER_SESSIONS) return;
+      }
+      this.relayPreferred.set(from, Date.now() + RELAY_RETRY_DIRECT_MS);
+      s = this.newRelay(from);
+      this.onSessionOpen(s);
+    }
+    (s as RelaySession).receive(data);
+  }
+
   private sendTo(peer: UserId, msg: Record<string, unknown>): boolean {
     const s = this.sessions.get(peer);
     return s?.state === 'open' ? s.send(msg) : false;
@@ -1138,7 +1187,7 @@ export class ChatEngine {
 
   // -------------------------------------------------------- peer protocol
 
-  private async onPeerMessage(s: PeerSession, msg: Record<string, unknown>) {
+  private async onPeerMessage(s: ChatSession, msg: Record<string, unknown>) {
     const peer = s.peerId;
     if (this.isBlocked(peer)) return;
     switch (msg.t) {
@@ -1217,12 +1266,12 @@ export class ChatEngine {
     return out;
   }
 
-  private requestSync(s: PeerSession, conv: ConvId) {
+  private requestSync(s: ChatSession, conv: ConvId) {
     s.asked.add(conv);
     s.send({ t: 'sync', conv, vector: this.vector(conv) });
   }
 
-  private afterHello(s: PeerSession) {
+  private afterHello(s: ChatSession) {
     for (const conv of this.sharedConvs(s.peerId)) this.requestSync(s, conv);
     this.flushReceipts(s.peerId);
     this.resumeDownloads();
@@ -1357,7 +1406,6 @@ export class ChatEngine {
     if (msg && e.ts > next.lastTs) next.lastTs = e.ts;
     // A deleted chat comes back when a new message arrives.
     if (msg && next.hidden && e.ts > (next.clearedBefore ?? 0)) next.hidden = false;
-    if (e.kind === 'text' && next.type === 'dm' && next.peerId && next.peerId !== this.me) this.connectionActivity(next.peerId);
     if (e.author !== this.me && msg && !(this.activeConv === e.conv && document.visibilityState === 'visible')) {
       next.unread += 1;
       if (next.archived && !next.muted) next.archived = false;
@@ -1600,69 +1648,6 @@ export class ChatEngine {
     return null;
   }
 
-  // ------------------------------------------------------------- connection
-
-  /** Current Connection view for a direct-chat peer; starts loading it the first time. */
-  connectionOf(peer: UserId): ConnectionView | undefined {
-    const v = this.connections.get(peer);
-    if (!v) void this.loadConnection(peer);
-    return v;
-  }
-
-  private async loadConnection(peer: UserId) {
-    if (!this.signaling?.online || this.connLoading.has(peer) || peer === this.me) return;
-    this.connLoading.add(peer);
-    try {
-      this.onConnection(peer, pickView(await this.signaling.connectionGet(peer)));
-    } catch {
-      /* retried the next time the chat is shown */
-    } finally {
-      this.connLoading.delete(peer);
-    }
-  }
-
-  private onConnection(peer: UserId, view: ConnectionView) {
-    this.connections.set(peer, view);
-    this.notify();
-    // Nothing read yet: there may already be enough history to read.
-    if (view.available && !view.state) this.scheduleConnection(peer, 1500);
-  }
-
-  /** A text message was added to a direct chat: read the tone again once the conversation settles. */
-  private connectionActivity(peer: UserId) {
-    const v = this.connections.get(peer);
-    if (!v) return void this.loadConnection(peer);
-    if (v.available) this.scheduleConnection(peer, CONNECTION_SETTLE_MS);
-  }
-
-  private scheduleConnection(peer: UserId, delay: number) {
-    window.clearTimeout(this.connTimers.get(peer));
-    this.connTimers.set(peer, window.setTimeout(() => void this.runConnection(peer), delay));
-  }
-
-  private async runConnection(peer: UserId) {
-    this.connTimers.delete(peer);
-    const v = this.connections.get(peer);
-    // Only chats with accepted contacts: never message requests or blocked people.
-    if (!v?.available || !this.signaling?.online || this.contacts.get(peer)?.state !== 'contact') return;
-    // Text only. "Secret" and view-once messages were meant to vanish, so they're never sent.
-    const texts = this.eventsOf(dmId(this.me, peer)).filter(
-      (x) => x.kind === 'text' && !x.local.revoked && !x.body.secret && !x.body.viewOnce && typeof x.body.text === 'string',
-    );
-    const since = v.state?.updatedAt ?? 0;
-    const fresh = texts.filter((x) => x.ts > since).length;
-    const bothSpoke = new Set(texts.slice(-CONNECTION_WINDOW).map((x) => x.author)).size === 2;
-    // Message count alone never moves the score; this only decides when a new reading is worth it.
-    if (!bothSpoke || texts.length < CONNECTION_MIN_TEXTS || (v.state && fresh < CONNECTION_MIN_NEW)) return;
-    const messages = texts.slice(-CONNECTION_WINDOW).map((x) => ({ from: x.author, text: String(x.body.text), ts: x.ts }));
-    try {
-      const res = await this.signaling.connectionAnalyze(peer, messages);
-      if (res.skipped && res.retryIn) this.scheduleConnection(peer, res.retryIn + 1000);
-    } catch {
-      /* the server backs off after a failure; the next message tries again */
-    }
-  }
-
   async sendText(conv: ConvId, text: string, replyTo: string | null = null, mode: SendMode = 'normal') {
     const t = text.trim();
     if (!t) return;
@@ -1820,7 +1805,7 @@ export class ChatEngine {
     }
   }
 
-  private onFileChannel(s: PeerSession, channel: RTCDataChannel) {
+  private onFileChannel(s: ChatSession, channel: RTCDataChannel) {
     const rid = channel.label.slice(5);
     const req = this.fileRequests.get(rid);
     if (!req || req.peer !== s.peerId) return channel.close();
@@ -1858,7 +1843,7 @@ export class ChatEngine {
       });
   }
 
-  private async serveFile(s: PeerSession, fileId: string, rid: string) {
+  private async serveFile(s: ChatSession, fileId: string, rid: string) {
     const e = this.byFile.get(fileId);
     if (!e || !this.mayRead(s.peerId, e.conv) || !/^[A-Za-z0-9_-]{8,32}$/.test(rid)) {
       return void s.send({ t: 'file-na', rid });
@@ -1866,9 +1851,9 @@ export class ChatEngine {
     const rec = await db.get<{ fileId: string; blob: Blob }>('files', fileId);
     if (!rec) return void s.send({ t: 'file-na', rid });
     const channel = s.openFileChannel(`file:${rid}`);
-    const max = s.pc.sctp?.maxMessageSize;
-    const chunk = max && Number.isFinite(max) ? Math.max(16 * 1024, Math.min(64 * 1024, max)) : 16 * 1024;
-    sendFile(channel, rec.blob, chunk).catch(() => channel.close());
+    // Through the server, keep less in flight so a big file doesn't pile up there.
+    const limits = s.viaServer ? { high: 512 * 1024, low: 128 * 1024 } : undefined;
+    sendFile(channel, rec.blob, s.maxChunk, limits).catch(() => channel.close());
   }
 
   // ------------------------------------------------------ conversations
@@ -1980,6 +1965,21 @@ export class ChatEngine {
       if (author === this.me) mine = v.r;
     }
     return { counts, mine };
+  }
+
+  /** The emoji `author` set for the direct chat with `peer` (null when none). */
+  moodIn(peer: UserId, author: UserId): string | null {
+    return this.moods.get(dmId(this.me, peer))?.get(author)?.e ?? null;
+  }
+
+  /** Sets (or clears) my emoji for a direct chat; the other person sees it on my picture. */
+  async setMood(peer: UserId, emoji: string | null) {
+    const conv = dmId(this.me, peer);
+    if (!this.convs.has(conv)) return;
+    const err = this.canPost(conv);
+    if (err) return this.toast(err, 'error');
+    if (this.moodIn(peer, this.me) === emoji) return;
+    await this.publish(await this.makeEvent(conv, 'mood', { e: emoji }));
   }
 
   /** One reaction per person: picking another replaces it, picking the same removes it. */

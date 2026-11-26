@@ -44,18 +44,16 @@ interface Settings {
   gifsEnabled: boolean;
   micCreateEnabled: boolean;
   postmanEnabled: boolean;
-  connectionAiEnabled: boolean;
   announcement: { text: string; tone: 'info' | 'warning' | 'success'; updatedAt: number } | null;
 }
 
 interface Overview {
   server: { startedAt: number; uptimeSeconds: number; node: string; memoryMb: number; heapMb: number; load: number[]; adminSessions: number };
   accounts: { mode: 'connected' | 'starting' | 'error' | 'disabled'; inactiveDays: number; total?: number; new24h?: number; new7d?: number; active24h?: number; banned: number };
-  chat: { online: number; groupsOnline: number; invites: number };
+  chat: { online: number; groupsOnline: number; invites: number; relay?: { enabled: boolean; mbPerUserPerHour: number; mbLastHour: number } };
   mic: { rooms: number; people: number };
   postman: { total: number; waiting: number; paired: number };
   gif: { configured: boolean; used: number; limit: number; cached: number; unauthorized: boolean; upstreamLimited: boolean };
-  connection?: { configured: boolean; enabled: boolean; usedLastHour: number; limit: number };
   settings: Settings;
 }
 
@@ -358,7 +356,7 @@ function OverviewSection({ onGo }: { onGo: (s: Section) => void }) {
         <p className="mb-4 rounded-lg border border-warning/30 bg-warning-soft px-4 py-2.5 text-[13.5px] text-warning">Switched off: {off.join(', ')}.</p>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={Users} label="Chat users online" value={data.chat.online} detail={`${data.chat.groupsOnline} active groups · ${data.chat.invites} invite links`} />
+        <Stat icon={Users} label="Chat users online" value={data.chat.online} detail={`${data.chat.groupsOnline} active groups · ${data.chat.invites} invite links${data.chat.relay?.enabled ? ` · ${data.chat.relay.mbLastHour} MB relayed this hour` : ''}`} />
         <Stat
           icon={Users}
           label="Profiles"
@@ -847,16 +845,6 @@ function ControlsSection({ notify }: { notify: Notify }) {
           <Switch checked={s.gifsEnabled} onChange={toggle('gifsEnabled', 'GIFs')} label="GIFs and stickers" description="When off, the GIF and sticker tabs say they're switched off. GIFs already sent still show." />
           <Switch checked={s.micCreateEnabled} onChange={toggle('micCreateEnabled', 'New Mic rooms')} label="Creating Mic rooms" description="When off, no new voice rooms can be created. Rooms already open keep working." />
           <Switch checked={s.postmanEnabled} onChange={toggle('postmanEnabled', 'Postman')} label="UR Postman transfers" description="When off, nobody can start a new file transfer. Transfers in progress finish." />
-          <Switch
-            checked={s.connectionAiEnabled}
-            onChange={toggle('connectionAiEnabled', 'Connection (AI)')}
-            label="Connection (AI score in chats)"
-            description={
-              !data.connection?.configured
-                ? 'No ANTHROPIC_API_KEY on the server, so the feature is hidden either way.'
-                : `When off, the Connection score and switch disappear from chats. ${data.connection.usedLastHour} of ${data.connection.limit} analyses used in the last hour.`
-            }
-          />
         </div>
       </Card>
       <Card className="mt-4">

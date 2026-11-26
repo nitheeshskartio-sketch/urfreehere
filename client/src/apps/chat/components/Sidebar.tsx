@@ -26,7 +26,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { Menu } from '../../../ui/Menu';
-import { ConnectionBadge } from './Connection';
+import { MoodBadge } from './Mood';
 import { deleteChatPrompt } from './deleteChat';
 import { useEngine } from '../hooks';
 import { shortTime } from '../lib/time';
@@ -313,9 +313,9 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
         className={`chat-list-row flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors ${active ? 'bg-panel shadow-card' : 'hover:bg-subtle'}`}
         aria-current={active ? 'true' : undefined}
       >
-        <ConnectionBadge peer={conv.type === 'dm' && !self && !blocked ? conv.peerId : undefined} load={false} size="sm">
+        <MoodBadge peer={conv.type === 'dm' && !self && !blocked ? conv.peerId : undefined} size="sm">
           <Avatar avatar={e.convImage(conv)} name={title} seed={conv.peerId ?? conv.groupId} size={36} group={conv.type === 'group'} online={online} />
-        </ConnectionBadge>
+        </MoodBadge>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className={`chat-name min-w-0 flex-1 truncate ${unread ? 'font-bold' : 'font-medium'}`}>{title}</span>

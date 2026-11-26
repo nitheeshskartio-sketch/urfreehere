@@ -156,25 +156,20 @@ The smiley button in the compose box opens a Teams-style picker with **Emoji**, 
 
 Location uses only the browser's Geolocation API, and only after the user presses **Use my current location**. It can also take coordinates or a link pasted from any maps app. Messages show the coordinates and accuracy, with **Open in Maps**, which opens Apple Maps on iOS or Google Maps elsewhere via a normal link. No map tiles, API keys or third-party requests are involved.
 
-## Connection (AI emotional connection)
+## Emoji on profile pictures
 
-Direct chats with accepted contacts show **Connection**: an emoji on the person's profile picture (chat header and chat list) for the emotional tone of the conversation, read by an AI model from the words and emoji the two people use. Behind it is one shared score from 0 to 100 with a status, shown in the contact info. Both people see the same result, and it updates as they chat. There is no switch or invite: it is automatic, and the site admin can turn it off for everyone. Code: [server/src/chat/connection.ts](../server/src/chat/connection.ts), [lib/connection.ts](../client/src/apps/chat/lib/connection.ts), [components/Connection.tsx](../client/src/apps/chat/components/Connection.tsx).
+In a direct chat, each person can pick one emoji for the other: from the smiley button in the chat header or in the contact info. The other person sees it on your profile picture, in the chat header and the chat list, and you see theirs on theirs. Picking it again or **Remove my emoji** clears it.
 
-| Score | Emoji | Status |
-| --- | --- | --- |
-| 0–20 | 🥶 | Cold |
-| 21–40 | 😐 | Distant |
-| 41–60 | 😊 | Friendly |
-| 61–80 | 🥰 | Close |
-| 81–100 | ❤️ | Deep Connection |
+It's a signed chat event (`kind: 'mood'`, body `{ e: emoji | null }`), sent and synced peer to peer like reactions, so it reaches the other person even if they were offline. The latest one from each person wins. No server or AI is involved.
 
-The model also names the current tone (happiness 😍, affection ❤️, caring 🥰, friendship 😊, excitement 🤩, missing 🥺, trust 🤝, neutral 😐, sadness 😔, anger 😡, disconnection 💔). That emoji is the one on the profile picture; hovering it shows the score and status. The contact info explains what is sent.
-- **What is sent:** at analysis time, a device sends up to the last 40 text messages of the chat (600 characters each) over the signaling socket. The server labels the two people A and B (no names or chat IDs), sends the text to Claude (`claude-opus-5-5`, low effort, structured output), and drops it. Secret, view-once, deleted and locally cleared messages are never sent. Images, files, GIFs and locations are not sent.
-- **Not analysed:** message requests, blocked people, groups and your personal chat.
-- **What is kept:** one record per pair in MongoDB `chat_connections` (or in memory): the current score and tone, and when. There is no history, and abandoned pairs expire after 30 days. Deleting an account removes its records.
-- **When it runs:** 8 seconds after the conversation goes quiet, once there are at least 6 text messages from both people, then again after at least 3 new ones. Each pair is analysed at most once a minute, with one request in flight, so two devices never cause a double call. The current score is given to the model as the starting point, so it moves gradually. The number of messages doesn't raise the score by itself. With too little context the model says so, and the chat shows "Not enough to go on yet" instead of a score.
-- **Limits and switches:** `ANTHROPIC_API_KEY` must be set on the server; without it the feature is hidden. `CONNECTION_AI_HOURLY_LIMIT` (default 200) caps analyses across the server, and each user can trigger 40 per hour. The admin console's **Controls** page can switch it off for everyone and shows usage.
-- **Caveat:** the score is an AI estimate of tone, not a measure of anyone's feelings, and the UI says so. A modified client could send made-up text for its own chats. That would only change the score shown to that pair.
+## Server relay (when a direct connection isn't possible)
+
+Some networks (mobile data, some office or college Wi-Fi) block every direct WebRTC path, and without a TURN server two such people could never connect. If a direct attempt fails (15 s timeout, or ICE "failed"), both devices switch to the **server relay**: the same control messages, sync and file transfers travel as frames over the signaling socket ([lib/relay.ts](../client/src/apps/chat/lib/relay.ts)). The chat header shows "via server".
+
+- The server forwards each frame to the other person's socket, stamped with the authenticated sender, and stores or logs nothing.
+- Every chat event is still signed by its author and verified on arrival. With no DTLS handshake, the relay `hello` carries the sender's public key, accepted only if it hashes to their chat ID.
+- Frames are at most 48 KB (control messages split at 32 KB, file chunks 16 KB), and a file transfer keeps at most 512 KB in flight. Each user may relay `RELAY_MB_PER_HOUR` (default 200) MB per hour; `0` turns the relay off. The admin overview shows how much was relayed in the last hour.
+- A device tries a direct connection again after 30 minutes, or when someone presses **Try again**.
 
 ## Privacy and security summary
 
@@ -183,7 +178,7 @@ The model also names the current tone (happiness 😍, affection ❤️, caring 
 | Transport | WebRTC DTLS on every connection. TURN relays can't decrypt. |
 | Authentication | Server login by signature. Peers verify signed DTLS fingerprints against the user ID. |
 | Integrity | Every message and group op is signed by its author and checked on receipt and on catch-up. |
-| Server knowledge | Account profiles in MongoDB (deleted after 7 days inactive), online IDs, who signals whom, group IDs a client belongs to, invite metadata. No message content and no files, except recent text passed through (not stored) for **Connection** in direct chats where both people switched it on. |
+| Server knowledge | Account profiles in MongoDB (deleted after 7 days inactive), online IDs, who signals whom, group IDs a client belongs to, invite metadata. No message content and no files are stored. When two people can't connect directly, their frames pass through the server relay without being stored. |
 | Storage | Unencrypted IndexedDB on each participant's device. "Delete everything" in Settings wipes it. |
 | Unknown senders | Shown under **Message requests**: no read receipts, no auto-downloads, Accept or Block. Blocked IDs can't connect. |
 | Rate limits | Connections, invite lookups, joins and invite creation per IP or user; signals per socket. |

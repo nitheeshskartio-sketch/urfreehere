@@ -1,7 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { sign, type Identity } from './identity';
 import type { UserId } from './types';
-import type { ConnectionView } from './connection';
 
 export interface IceConfig {
   iceServers: RTCIceServer[];
@@ -60,8 +59,8 @@ export interface SignalingHandlers {
   onInviteResult(result: InviteResult): void;
   /** Logged in. `account` is null when the server runs without accounts. */
   onAuthed(account: AccountInfo | null, accountsEnabled: boolean, links: AccountLinks | null): void;
-  /** Connection changed for a direct chat (either person switched it, or a new result). */
-  onConnection(peerId: UserId, view: ConnectionView): void;
+  /** A frame relayed by the server from someone we can't reach directly. */
+  onRelay(from: UserId, data: unknown): void;
 }
 
 const BASE: string = import.meta.env.VITE_SIGNALING_URL || '';
@@ -69,8 +68,8 @@ const TIMEOUT = 10_000;
 
 /**
  * Connection to the UR Chat signaling hub. Carries presence, WebRTC
- * handshakes and invitation requests. Message content is never sent, except
- * recent direct-chat text for the Connection feature.
+ * handshakes and invitation requests, and relays frames for people who can't
+ * connect directly (see relay.ts).
  */
 export class ChatSignaling {
   private socket: Socket;
@@ -118,10 +117,7 @@ export class ChatSignaling {
     this.socket.on('presence', (p: { userId: UserId; online: boolean }) => handlers.onPresence(p.userId, p.online));
     this.socket.on('group:join-request', (req: JoinRequest) => handlers.onJoinRequest(req));
     this.socket.on('invite:result', (r: InviteResult) => handlers.onInviteResult(r));
-    this.socket.on('connection:update', (p: ConnectionView & { peerId: UserId }) => {
-      const { peerId, ...view } = p;
-      handlers.onConnection(peerId, view);
-    });
+    this.socket.on('relay', (p: { from: UserId; data: unknown }) => handlers.onRelay(p.from, p.data));
   }
 
   get online() {
@@ -246,6 +242,17 @@ export class ChatSignaling {
     }
   }
 
+  /** Forwards a frame to another user through the server. False when it couldn't be delivered. */
+  async relay(to: UserId, data: unknown): Promise<boolean> {
+    if (!this.authed) return false;
+    try {
+      await this.request('relay', { to, data });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   createInvite(input: {
     groupId: string;
     token: string;
@@ -287,15 +294,6 @@ export class ChatSignaling {
     } catch {
       return false;
     }
-  }
-
-  connectionGet(peer: UserId) {
-    return this.request<ConnectionView & Record<string, unknown>>('connection:get', { peer });
-  }
-
-  /** Recent text messages of a direct chat for the server to analyse (Connection). */
-  connectionAnalyze(peer: UserId, messages: { from: UserId; text: string; ts: number }[]) {
-    return this.request<{ skipped?: string; retryIn?: number }>('connection:analyze', { peer, messages });
   }
 
   close() {

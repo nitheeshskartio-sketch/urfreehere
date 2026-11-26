@@ -18,9 +18,15 @@ function waitOpen(channel: RTCDataChannel): Promise<void> {
  * then an end marker. Backpressure keeps the send buffer bounded so large
  * files never pile up in memory.
  */
-export async function sendFile(channel: RTCDataChannel, blob: Blob, chunkSize: number): Promise<void> {
+export async function sendFile(
+  channel: RTCDataChannel,
+  blob: Blob,
+  chunkSize: number,
+  /** In-flight limits; smaller when the server forwards the data. */
+  limits: { high: number; low: number } = { high: BUFFER_HIGH, low: BUFFER_LOW },
+): Promise<void> {
   channel.binaryType = 'arraybuffer';
-  channel.bufferedAmountLowThreshold = BUFFER_LOW;
+  channel.bufferedAmountLowThreshold = limits.low;
   await waitOpen(channel);
   channel.send(JSON.stringify({ t: 'meta', size: blob.size }));
 
@@ -46,7 +52,7 @@ export async function sendFile(channel: RTCDataChannel, blob: Blob, chunkSize: n
     const block = await blob.slice(offset, offset + READ_BLOCK).arrayBuffer();
     for (let p = 0; p < block.byteLength; p += chunkSize) {
       if (channel.readyState !== 'open') throw new Error('closed');
-      if (channel.bufferedAmount > BUFFER_HIGH) await drain();
+      if (channel.bufferedAmount > limits.high) await drain();
       channel.send(new Uint8Array(block, p, Math.min(chunkSize, block.byteLength - p)));
     }
   }

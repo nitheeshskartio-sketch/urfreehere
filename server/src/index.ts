@@ -127,8 +127,7 @@ const chat = attachChat(io, app, {
   dataFile: config.chat.dataFile,
   production: config.isProduction,
   accounts: accountStore,
-  anthropicApiKey: config.anthropicApiKey,
-  connectionHourlyLimit: config.connectionHourlyLimit,
+  relayMbPerHour: config.relayMbPerHour,
 });
 
 // --- GIPHY proxy for UR Chat (key stays on the server) --------------------

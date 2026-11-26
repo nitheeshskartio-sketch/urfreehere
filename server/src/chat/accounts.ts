@@ -213,11 +213,6 @@ export class AccountStore {
     await this.bans.deleteOne({ _id: userId });
   }
 
-  /** Another collection in the same database (used by features that keep small per-pair records). */
-  collection<T extends { _id: string }>(name: string): Collection<T> {
-    return this.db.collection<T>(name);
-  }
-
   async loadSetting<T>(key: string): Promise<T | null> {
     return ((await this.site.findOne({ _id: key }))?.value as T) ?? null;
   }

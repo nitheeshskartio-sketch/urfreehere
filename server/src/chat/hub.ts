@@ -16,7 +16,6 @@ import {
 import { AccountStore, parseProfile, toPublic, type AccountLinks } from './accounts.js';
 import { InviteStore, type InvitePreview, type JoinRequest } from './invites.js';
 import { bannedIds, settings } from '../settings.js';
-import { ConnectionService } from './connection.js';
 
 /**
  * UR Chat signaling hub (Socket.IO namespace "/chat").
@@ -27,9 +26,9 @@ import { ConnectionService } from './connection.js';
  *  - relay WebRTC offers/answers/ICE between authenticated users
  *  - group invitations: metadata, preview, join requests routed to online members
  *
- * Chat messages and files never pass through this server. The one exception
- * is Connection (see connection.ts): devices send recent direct-chat text for
- * analysis, which is passed to the AI model and not stored.
+ * Chat messages and files don't pass through this server, except through the
+ * relay below when two people can't connect directly; relayed frames are
+ * forwarded and never stored.
  */
 
 export interface ChatHubOptions {
@@ -38,9 +37,8 @@ export interface ChatHubOptions {
   production: boolean;
   /** MongoDB accounts; null when MONGODB_URI isn't configured. */
   accounts: Promise<AccountStore> | null;
-  /** Claude API key for Connection; empty switches the feature off. */
-  anthropicApiKey: string;
-  connectionHourlyLimit: number;
+  /** Per-user relay budget; 0 disables the relay. */
+  relayMbPerHour: number;
 }
 
 interface Session {
@@ -60,6 +58,19 @@ const SIGNAL_KINDS = new Set(['offer', 'answer', 'ice', 'connect', 'bye']);
 const GROUP_ID_RE = /^[A-Za-z0-9_-]{16,40}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{22,64}$/;
 const DEVICE_RE = /^[A-Za-z0-9_-]{16,64}$/;
+/** One relayed frame: control messages are split at 32 KB, file chunks are 16 KB. */
+const MAX_RELAY_BYTES = 48 * 1024;
+
+function relaySize(v: unknown): number {
+  if (v instanceof ArrayBuffer) return v.byteLength;
+  if (ArrayBuffer.isView(v)) return v.byteLength;
+  if (v && typeof v === 'object') {
+    let n = 0;
+    for (const x of Object.values(v as Record<string, unknown>)) n += relaySize(x) + 16;
+    return n;
+  }
+  return typeof v === 'string' ? v.length : 8;
+}
 
 type Ack = (response: Record<string, unknown>) => void;
 const ackOf = (fn: unknown): Ack => (typeof fn === 'function' ? (fn as Ack) : () => {});
@@ -125,6 +136,24 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
   const watchers = new Map<string, Set<string>>(); // watched userId -> watcher userIds
   const groupMembers = new Map<string, Set<string>>(); // groupId -> online userIds that announced it
 
+  // Relay budget per user per hour (bytes), so one person can't run up the server's bandwidth.
+  const relayBudget = new Map<string, { bytes: number; resetAt: number }>();
+  let relayedBytes = 0;
+  let relayedSince = Date.now();
+  const relayAllowed = (userId: string, bytes: number) => {
+    const now = Date.now();
+    let b = relayBudget.get(userId);
+    if (!b || b.resetAt <= now) relayBudget.set(userId, (b = { bytes: 0, resetAt: now + 60 * 60 * 1000 }));
+    if (b.bytes + bytes > opts.relayMbPerHour * 1024 * 1024) return false;
+    b.bytes += bytes;
+    if (now - relayedSince > 60 * 60 * 1000) {
+      relayedSince = now;
+      relayedBytes = 0;
+    }
+    relayedBytes += bytes;
+    return true;
+  };
+
   const windowMs = 10 * 60 * 1000;
   const scale = opts.production ? 1 : 20;
   const connectLimiter = new WindowLimiter(120 * scale, windowMs);
@@ -160,14 +189,6 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     for (const w of watchers.get(userId) ?? []) emitTo(w, 'presence', { userId, online });
   };
 
-  const connection = new ConnectionService({
-    accounts: opts.accounts,
-    production: opts.production,
-    apiKey: opts.anthropicApiKey,
-    hourlyLimit: opts.connectionHourlyLimit,
-    emitTo,
-  });
-
   const deliverPending = (groupId: string, toUserId?: string) => {
     for (const req of invites.pendingFor(groupId)) {
       if (toUserId) emitTo(toUserId, 'group:join-request', req);
@@ -183,6 +204,8 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
   nsp.on('connection', (socket) => {
     const ip = opts.clientIp(socket);
     const bucket = new TokenBucket(60, 240);
+    // Relayed frames come in bursts (sync batches, file chunks); bytes are capped separately.
+    const relayBucket = new TokenBucket(400, 1200);
     let session: Session | null = null;
     let pendingAuth: { userId: string; jwk: PublicJwk; nonce: string } | null = null;
 
@@ -357,6 +380,28 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       ack({ ok: true });
     });
 
+    /**
+     * Server relay: forwards a frame to another online user when a direct
+     * connection isn't possible. Nothing is stored or logged. The server stamps
+     * the authenticated sender, as with signals.
+     */
+    socket.on('relay', (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s) return;
+      if (!opts.relayMbPerHour) return ack({ ok: false, error: 'DISABLED' });
+      if (!relayBucket.take()) return ack({ ok: false, error: 'RATE_LIMITED' });
+      const p = payload as { to?: unknown; data?: unknown } | null;
+      if (!isUserId(p?.to) || p!.to === s.userId || !p?.data || typeof p.data !== 'object') return ack({ ok: false, error: 'INVALID' });
+      const size = relaySize(p.data);
+      if (size > MAX_RELAY_BYTES) return ack({ ok: false, error: 'TOO_LARGE' });
+      const target = sessions.get(p.to as string);
+      if (!target) return ack({ ok: false, error: 'OFFLINE' });
+      if (!relayAllowed(s.userId, size)) return ack({ ok: false, error: 'BUDGET' });
+      target.socket.emit('relay', { from: s.userId, data: p.data });
+      ack({ ok: true });
+    });
+
     socket.on('groups:announce', (payload: unknown, ackFn: unknown) => {
       const ack = ackOf(ackFn);
       const s = authed(ack);
@@ -493,31 +538,6 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       ack({ ok: true });
     });
 
-    // --- Connection (AI emotional connection score), direct chats only.
-    const connectionPeer = (payload: unknown, s: Session): string | null => {
-      const peer = (payload as { peer?: unknown } | null)?.peer;
-      return isUserId(peer) && peer !== s.userId ? peer : null;
-    };
-
-    socket.on('connection:get', async (payload: unknown, ackFn: unknown) => {
-      const ack = ackOf(ackFn);
-      const s = authed(ack);
-      if (!s || !bucket.take()) return;
-      const peer = connectionPeer(payload, s);
-      if (!peer) return ack({ ok: false, error: 'INVALID' });
-      ack({ ok: true, ...(await connection.get(s.userId, peer)) });
-    });
-
-    socket.on('connection:analyze', async (payload: unknown, ackFn: unknown) => {
-      const ack = ackOf(ackFn);
-      const s = authed(ack);
-      if (!s || !bucket.take()) return;
-      const peer = connectionPeer(payload, s);
-      if (!peer) return ack({ ok: false, error: 'INVALID' });
-      if (jsonSize(payload) > 64 * 1024) return ack({ ok: false, error: 'TOO_LARGE' });
-      ack(await connection.analyze(s.userId, peer, (payload as { messages?: unknown }).messages));
-    });
-
     socket.on('disconnect', () => {
       if (!session || sessions.get(session.userId)?.socket.id !== socket.id) return;
       // Leaving counts as activity: the 7-day countdown starts from now.
@@ -542,6 +562,8 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     inviteLimiter.sweep();
     for (const [id, set] of watchers) if (!set.size) watchers.delete(id);
     for (const [g, set] of groupMembers) if (!set.size) groupMembers.delete(g);
+    const now = Date.now();
+    for (const [u, b] of relayBudget) if (b.resetAt <= now) relayBudget.delete(u);
   }, 60_000).unref();
 
   return {
@@ -549,8 +571,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     isOnline: (userId: string) => sessions.has(userId),
     onlineGroups: () => groupMembers.size,
     inviteCount: () => invites.count(),
-    forgetConnections: (userId: string) => connection.forgetUser(userId),
-    connectionStats: () => connection.stats(),
+    relayStats: () => ({ enabled: opts.relayMbPerHour > 0, mbPerUserPerHour: opts.relayMbPerHour, mbLastHour: Math.round((relayedBytes / 1048576) * 10) / 10 }),
     /** Admin: tells the device its account was deleted or suspended, then disconnects it. */
     kick(userId: string, reason: 'deleted' | 'banned') {
       const s = sessions.get(userId);

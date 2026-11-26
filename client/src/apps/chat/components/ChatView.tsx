@@ -26,7 +26,7 @@ import { ImageViewer } from './ImageViewer';
 import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
 import { deleteChatPrompt } from './deleteChat';
-import { ConnectionBadge } from './Connection';
+import { MoodBadge, MoodButton } from './Mood';
 
 export function ChatView({
   conv,
@@ -117,6 +117,11 @@ export function ChatView({
         {st === 'connected' ? 'online' : st === 'connecting' ? 'connecting…' : st === 'online' ? 'online' : st === 'unreachable' ? (
           <span title="They're online, but a connection couldn't be made. Usually one of the networks blocks direct connections.">online · can't connect</span>
         ) : 'offline'}
+        {st === 'connected' && route === 'server' && (
+          <span className="inline-flex items-center gap-1 text-muted" title="A direct connection isn't possible on this network, so messages are passed on by the UR Free Here server. It doesn't store them.">
+            · <Server className="size-3" /> via server
+          </span>
+        )}
         {st === 'connected' && route === 'relay' && (
           <span className="inline-flex items-center gap-1 text-muted" title="A direct connection wasn't possible, so encrypted data is forwarded by a relay server that can't read it.">
             · <Server className="size-3" /> via relay
@@ -158,7 +163,7 @@ export function ChatView({
           </button>
         )}
         <button type="button" onClick={onInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-left hover:bg-surface">
-          <ConnectionBadge peer={!isGroup && !self && contact?.state === 'contact' ? conv.peerId : undefined}>
+          <MoodBadge peer={!isGroup && !self ? conv.peerId : undefined}>
             <Avatar
               avatar={e.convImage(conv)}
               name={title}
@@ -167,12 +172,13 @@ export function ChatView({
               group={isGroup}
               online={!isGroup && !self && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
             />
-          </ConnectionBadge>
+          </MoodBadge>
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold">{title}</span>
             <span className="block truncate text-[12.5px] text-muted">{subtitle}</span>
           </span>
         </button>
+        {!isGroup && !self && conv.peerId && canPost && contact?.state === 'contact' && <MoodButton peer={conv.peerId} />}
         {isGroup && e.isAdmin(conv.groupId!) && !group?.deleted && (
           <button type="button" onClick={onInvite} className="hidden rounded-md p-2 text-muted hover:bg-surface hover:text-ink sm:block" aria-label="Invite people" title="Invite people">
             <UserPlus className="size-5" />

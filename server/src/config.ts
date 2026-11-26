@@ -79,10 +79,12 @@ export const config = {
   /** Password for the admin console (/admin). Empty disables it. Never sent to browsers. */
   adminPassword: env.ADMIN_PASSWORD || '',
 
-  /** Claude API key for UR Chat's Connection feature. Empty disables the feature. */
-  anthropicApiKey: env.ANTHROPIC_API_KEY || '',
-  /** Most Connection analyses per hour across the whole server (cost guard). */
-  connectionHourlyLimit: int('CONNECTION_AI_HOURLY_LIMIT', 200),
+  /**
+   * UR Chat server relay: when two people can't connect directly (strict NATs,
+   * no TURN), their messages and files are forwarded over the signaling socket.
+   * Megabytes each user may relay per hour; 0 switches the relay off.
+   */
+  relayMbPerHour: Number.isFinite(Number(env.RELAY_MB_PER_HOUR)) && env.RELAY_MB_PER_HOUR !== '' && env.RELAY_MB_PER_HOUR !== undefined ? Math.max(0, Number(env.RELAY_MB_PER_HOUR)) : 200,
 
   chat: {
     /** MongoDB for UR Chat accounts (profiles only). Leave empty to run without accounts. */

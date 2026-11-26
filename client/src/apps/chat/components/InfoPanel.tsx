@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { formatBytes } from '../../../lib/format';
 import { Button } from '../../../ui/Button';
 import { useEngine, useFileUrl } from '../hooks';
-import { ConnectionSection } from './Connection';
+import { MoodSection } from './Mood';
 import { formatUserId } from '../lib/encoding';
 import { MAX_GROUP_MEMBERS } from '../lib/groups';
 import { sanitizeName } from '../lib/media';
@@ -74,7 +74,7 @@ function ContactInfo({ conv }: { conv: Conversation }) {
         {p?.status && <p className="mt-1 text-sm text-muted">{p.status}</p>}
         <p className="mt-2 text-[13px] text-muted">{st === 'connected' ? 'Connected' : st === 'connecting' ? 'Connecting…' : st === 'online' ? 'Online' : st === 'unreachable' ? "Online · can't connect right now" : 'Offline'}</p>
       </div>
-      {contact?.state === 'contact' && <ConnectionSection peer={id} />}
+      {contact?.state === 'contact' && <MoodSection peer={id} />}
       <Section title="Chat ID">
         <div className="flex items-center justify-between gap-2">
           <code className="font-mono text-sm tracking-wider">{formatUserId(id)}</code>
@@ -94,9 +94,11 @@ function ContactInfo({ conv }: { conv: Conversation }) {
         {st === 'connected' && (
           <p className="mt-2 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
             <Server className="mt-0.5 size-4 shrink-0" />
-            {route === 'relay'
-              ? 'Connected through a relay server because a direct path was blocked. The relay forwards encrypted data it cannot read.'
-              : 'Connected directly, peer to peer.'}
+            {route === 'server'
+              ? "A direct connection isn't possible on this network, so messages and files are passed on by the UR Free Here server. It doesn't store them. Every message is still signed by its sender and checked here."
+              : route === 'relay'
+                ? 'Connected through a relay server because a direct path was blocked. The relay forwards encrypted data it cannot read.'
+                : 'Connected directly, peer to peer.'}
           </p>
         )}
       </Section>

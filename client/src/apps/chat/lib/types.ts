@@ -57,7 +57,13 @@ export interface Conversation {
   joining?: JoiningInfo;
 }
 
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete';
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood';
+
+/**
+ * Emoji each person sets for a direct chat. The other person sees it on your
+ * profile picture. Any single emoji is accepted; these are offered first.
+ */
+export const MOODS = ['😍', '❤️', '🥰', '😊', '🤩', '🥺', '🤝', '😂', '😎', '🤗', '😐', '😴', '😔', '😢', '😡', '💔', '🥶', '🔥', '🙏', '🤔'];
 
 /** Message reactions: one per person per message. */
 export type Reaction = 'love' | 'broken' | 'slap';
