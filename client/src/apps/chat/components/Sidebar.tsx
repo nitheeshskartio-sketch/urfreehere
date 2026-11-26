@@ -1,6 +1,7 @@
 import {
   Archive,
   ArchiveRestore,
+  Bell,
   ArrowLeft,
   BellOff,
   ChevronDown,
@@ -27,6 +28,7 @@ import { Menu } from '../../../ui/Menu';
 import { useEngine } from '../hooks';
 import { shortTime } from '../lib/time';
 import type { Conversation } from '../lib/types';
+import { enableDesktopNotifications, notificationPermission } from '../lib/notify';
 import { Ticks } from './Ticks';
 
 export type Dialog = 'new-chat' | 'new-group' | 'join' | 'scan' | 'settings' | 'sign-out' | null;
@@ -51,6 +53,9 @@ export function Sidebar({
   const [filter, setFilter] = useState<Filter>(null);
   const [view, setView] = useState<'chats' | 'archived' | 'requests'>('chats');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [askNotify, setAskNotify] = useState(
+    () => notificationPermission() === 'default' && !e.settings.desktopNotifications && localStorage.getItem('urchat.notify-prompt') !== 'dismissed',
+  );
 
   const all = useMemo(() => [...e.convs.values()], [e.version]);
   const requestIds = new Set(e.requests().map((c) => c.userId));
@@ -141,6 +146,39 @@ export function Sidebar({
           Offline. Messages are saved and sent when you reconnect.
         </div>
       ) : null}
+
+      {askNotify && (
+        <div className="mx-3 mb-2 flex items-start gap-2.5 rounded-md border border-line bg-panel px-3 py-2.5 shadow-card">
+          <Bell className="mt-0.5 size-4 shrink-0 text-accent" />
+          <div className="min-w-0 flex-1 text-[12.5px]">
+            <p className="font-semibold">Get notified about new messages</p>
+            <p className="text-muted">See a notification when a message arrives while you're in another tab.</p>
+            <div className="mt-1.5 flex gap-3">
+              <button
+                type="button"
+                className="font-semibold text-accent hover:underline"
+                onClick={async () => {
+                  const r = await enableDesktopNotifications(e);
+                  setAskNotify(false);
+                  if (r === 'denied') e.toast('Notifications are blocked. You can allow them in your browser\'s site settings.', 'error');
+                }}
+              >
+                Turn on
+              </button>
+              <button
+                type="button"
+                className="text-muted hover:text-ink"
+                onClick={() => {
+                  localStorage.setItem('urchat.notify-prompt', 'dismissed');
+                  setAskNotify(false);
+                }}
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search (phones; desktop uses the top bar) + filters */}
       <div className="shrink-0 space-y-2 px-3 pb-2">

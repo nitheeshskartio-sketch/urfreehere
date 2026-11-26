@@ -101,6 +101,16 @@ Every message is a signed **event**:
 - **Auto-download** applies to files up to 25 MB from contacts and group members. Requests from unknown people never auto-download.
 - **Cancel and retry** are available while a transfer is running. A stalled transfer (30 s idle) fails over to another peer.
 
+## Notifications
+
+These work like Teams, for **new messages** only. Muted conversations never notify. Messages older than 2 minutes, for example ones caught up after reconnecting, update the counts but don't pop up or play a sound.
+
+- **Tab badge:** a red circle with the unread count is drawn onto the tab icon, and the title becomes `(3) UR Chat`. While the tab is in the background and a new message arrives, the badge **blinks** and the title alternates with "Priya sent a message" (or "Priya in Product team"). Both stop when you return.
+- **Desktop notifications:** sender, group and message preview, one per conversation (newer ones replace older ones). Clicking one opens the conversation. They're only shown while UR Chat is in the background, and they need permission, asked through the "Get notified" prompt or Settings. They need HTTPS.
+- **Sound:** a short generated two-tone chime.
+- **Settings:** Desktop notifications, Show message preview, and Notification sound.
+- Messages aren't marked read, and no read receipts are sent, while the tab is in the background. That happens when you come back.
+
 ## GIFs and stickers (GIPHY)
 
 The smiley button in the compose box opens a Teams-style picker with **Emoji**, **GIFs** and **Stickers** tabs.

@@ -119,6 +119,12 @@ export interface GifBody {
 
 export interface Settings {
   enterToSend: boolean;
+  /** Desktop notifications for new messages (needs browser permission). */
+  desktopNotifications: boolean;
+  /** Show the message text in notifications. */
+  notificationPreview: boolean;
+  /** Play a short sound for new messages. */
+  notificationSound: boolean;
 }
 
 export type FileTransferState =

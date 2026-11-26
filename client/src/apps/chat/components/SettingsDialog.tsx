@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { CopyButton } from '../../../ui/CopyButton';
 import { useEngine } from '../hooks';
+import { enableDesktopNotifications, notificationPermission } from '../lib/notify';
 import { formatUserId } from '../lib/encoding';
 import type { AvatarRef } from '../lib/types';
 import { Avatar } from '../../../ui/avatar/Avatar';
@@ -22,6 +23,48 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
       <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-line-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-panel after:shadow after:transition-transform peer-checked:bg-accent peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40" />
     </label>
+  );
+}
+
+function NotificationToggles() {
+  const e = useEngine();
+  const perm = notificationPermission();
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <Toggle
+        checked={e.settings.desktopNotifications && perm === 'granted'}
+        onChange={async (v) => {
+          if (!v) return void e.updateSettings({ desktopNotifications: false });
+          setBusy(true);
+          const r = await enableDesktopNotifications(e);
+          setBusy(false);
+          if (r === 'denied') e.toast("Notifications are blocked. Allow them in your browser's site settings.", 'error');
+        }}
+        label="Desktop notifications"
+        hint={
+          perm === 'unsupported'
+            ? 'Not available here: notifications need a secure (HTTPS) page and a supported browser.'
+            : perm === 'denied'
+              ? "Blocked in this browser. Allow notifications for this site in your browser's settings."
+              : busy
+                ? 'Waiting for your browser…'
+                : 'Show a notification for new messages while UR Chat is in the background.'
+        }
+      />
+      <Toggle
+        checked={e.settings.notificationPreview}
+        onChange={(v) => void e.updateSettings({ notificationPreview: v })}
+        label="Show message preview"
+        hint="Include the message text in notifications."
+      />
+      <Toggle
+        checked={e.settings.notificationSound}
+        onChange={(v) => void e.updateSettings({ notificationSound: v })}
+        label="Notification sound"
+        hint="Play a short sound when a new message arrives."
+      />
+    </>
   );
 }
 
@@ -90,6 +133,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
               label="Press Enter to send"
               hint="Use Shift + Enter for a new line."
             />
+            <NotificationToggles />
 
           </div>
         </div>

@@ -14,6 +14,7 @@ import { SignOutDialog } from '../components/SignOutDialog';
 import { Sidebar, type Dialog } from '../components/Sidebar';
 import { useEngine, useMediaQuery } from '../hooks';
 import { engine } from '../lib/engine';
+import { startNotifications } from '../lib/notify';
 import type { ScanTarget } from '../../../lib/qr';
 
 let started = false;
@@ -52,6 +53,11 @@ export default function ChatApp({ path }: { path: string }) {
   useEffect(() => {
     document.title = 'UR Chat';
   }, []);
+
+  // Tab badge, desktop notifications and sound for new messages.
+  useEffect(() => {
+    if (e.status === 'ready') return startNotifications(engine);
+  }, [e.status]);
 
   const open = useCallback((convId: string) => navigate(convPath(convId)), []);
 

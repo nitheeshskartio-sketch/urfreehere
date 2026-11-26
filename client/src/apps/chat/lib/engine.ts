@@ -181,7 +181,7 @@ export class ChatEngine {
   net: SignalingStatus = 'connecting';
   identity: Identity | null = null;
   profile: Profile | null = null;
-  settings: Settings = { enterToSend: true };
+  settings: Settings = { enterToSend: true, desktopNotifications: false, notificationPreview: true, notificationSound: true };
 
   contacts = new Map<UserId, Contact>();
   profiles = new Map<UserId, Profile>();
@@ -1114,8 +1114,24 @@ export class ChatEngine {
     await run;
   }
 
+  private incomingListeners = new Set<(e: StoredEvent) => void>();
+
+  /** Called for each newly received message (not group operations). Used for notifications. */
+  onIncoming(fn: (e: StoredEvent) => void) {
+    this.incomingListeners.add(fn);
+    return () => void this.incomingListeners.delete(fn);
+  }
+
+  /** Total unread messages in conversations that aren't muted (for the tab badge). */
+  unreadTotal(): number {
+    let n = 0;
+    for (const c of this.convs.values()) if (!c.muted && c.unread > 0) n += c.unread;
+    return n;
+  }
+
   private onNewIncoming(e: StoredEvent) {
     if (e.kind === 'op') return;
+    for (const l of this.incomingListeners) l(e);
     const conv = this.convs.get(e.conv);
     const accepted = e.conv.startsWith('g:') || this.contacts.get(e.author)?.state === 'contact';
     const viewing = this.activeConv === e.conv && document.visibilityState === 'visible';
@@ -1169,6 +1185,8 @@ export class ChatEngine {
   markRead(conv: ConvId) {
     const c = this.convs.get(conv);
     if (!c) return;
+    // Nothing is read while the tab is in the background; it happens when the user comes back.
+    if (document.visibilityState !== 'visible') return;
     if (c.unread) this.saveConv({ ...c, unread: 0 });
     const accepted = conv.startsWith('g:') || this.contacts.get(c.peerId!)?.state === 'contact';
     if (!accepted || document.visibilityState !== 'visible') return this.notify();
