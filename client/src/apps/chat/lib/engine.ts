@@ -2113,10 +2113,10 @@ export class ChatEngine {
     this.notify();
   }
 
-  /** Meter drawn around someone's picture: the likes and dislikes I gave them (null when none, or for me). */
+  /** Meter drawn around someone's picture: the likes and dislikes they gave me (null when none, or for me). */
   ringFor(userId: UserId | undefined): Meter | null {
     if (!userId || userId === this.me || !this.convs.has(dmId(this.me, userId))) return null;
-    const m = this.meterOf(userId, this.me);
+    const m = this.meterOf(userId, userId);
     return m.likes || m.dislikes ? m : null;
   }
 
