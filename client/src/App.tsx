@@ -6,6 +6,7 @@ import NotFound from './pages/NotFound';
 import { SITE } from './site/config';
 import { SiteFooter } from './site/SiteFooter';
 import { SiteHeader } from './site/SiteHeader';
+import { CoffeeFab } from './site/coffee/CoffeeFab';
 
 // Apps are code-split so the home page stays small.
 const PostmanLanding = lazy(() => import('./apps/postman/pages/Landing'));
@@ -67,7 +68,13 @@ export default function App() {
   }, [route.title]);
 
   if (route.fullscreen) {
-    return <Suspense fallback={<div className="h-[100dvh] bg-surface" />}>{route.element}</Suspense>;
+    return (
+      <>
+        <Suspense fallback={<div className="h-[100dvh] bg-surface" />}>{route.element}</Suspense>
+        {/* Lifted above the chat compose box / Mic controls so it never covers them. */}
+        <CoffeeFab offset={route.app?.id === 'mic' ? 'room' : 'chat'} />
+      </>
+    );
   }
 
   return (
@@ -77,6 +84,7 @@ export default function App() {
         <Suspense fallback={<div className="h-64" />}>{route.element}</Suspense>
       </main>
       <SiteFooter />
+      <CoffeeFab />
     </div>
   );
 }

@@ -108,3 +108,78 @@ html[data-chat-density='compact'] .chat-list-row {
   padding-top: 4px;
   padding-bottom: 4px;
 }
+
+/* Buy me a coffee: gentle rising steam. */
+@keyframes coffee-steam {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-3px);
+  }
+}
+.coffee-steam path {
+  animation: coffee-steam 2.4s ease-in-out infinite;
+}
+.coffee-steam path:nth-child(2) {
+  animation-delay: 0.4s;
+}
+.coffee-steam path:nth-child(3) {
+  animation-delay: 0.8s;
+}
+
+/* Pouring the coffee */
+@keyframes coffee-fill {
+  from {
+    transform: translateY(56px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes coffee-stream {
+  0% {
+    opacity: 1;
+    stroke-dasharray: 0 60;
+  }
+  30% {
+    stroke-dasharray: 60 0;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes coffee-pop {
+  0%,
+  60% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.coffee-fill {
+  animation: coffee-fill 1.4s ease-out both;
+}
+.coffee-top {
+  animation: coffee-pop 1.6s ease-out both;
+  transform-origin: 60px 42px;
+}
+.coffee-stream {
+  animation: coffee-stream 1.5s ease-in-out both;
+}
+.coffee-heart {
+  animation: coffee-pop 1.9s ease-out both;
+  transform-origin: 60px 68px;
+}
