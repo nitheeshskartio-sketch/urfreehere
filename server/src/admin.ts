@@ -27,6 +27,7 @@ interface ChatAdmin {
   onlineGroups(): number;
   inviteCount(): number;
   kick(userId: string, reason: 'deleted' | 'banned'): boolean;
+  meterReset(userId: string, at: number): void;
   relayStats(): { enabled: boolean; mbPerUserPerHour: number; mbLastHour: number };
 }
 
@@ -227,6 +228,17 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
     if (!(await a.keepAlive(id).catch(() => false))) return res.status(404).json({ error: 'NOT_FOUND' });
     audit(req, `Reset inactivity timer for ${id}`);
     res.json({ ok: true });
+  });
+
+  router.post('/accounts/:id/reset-meter', async (req, res) => {
+    const a = needAccounts(res);
+    const id = idParam(req, res);
+    if (!a || !id) return;
+    const at = await a.resetMeter(id).catch(() => null);
+    if (!at) return res.status(404).json({ error: 'NOT_FOUND' });
+    opts.chat.meterReset(id, at);
+    audit(req, `Cleared likes and dislikes for ${id}`);
+    res.json({ ok: true, at });
   });
 
   const ban = async (req: Request, id: string, reason: string, name: string | null) => {

@@ -23,6 +23,7 @@ import {
   UserMinus,
   Users,
   X,
+  ThumbsDown,
   type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -494,6 +495,13 @@ function ProfilesSection({ notify }: { notify: Notify }) {
                       label: 'Keep active (reset timer)',
                       icon: Clock,
                       onSelect: () => void act(() => adminApi(`/accounts/${a.userId}/keep-alive`, { method: 'POST' }), `${a.name} will be kept for another period`),
+                    },
+                    {
+                      label: 'Clear likes & dislikes',
+                      icon: ThumbsDown,
+                      onSelect: () =>
+                        window.confirm(`Clear all likes and dislikes ${a.name} has received? Everyone's counts for them start again from zero.`) &&
+                        void act(() => adminApi(`/accounts/${a.userId}/reset-meter`, { method: 'POST' }), `Likes and dislikes cleared for ${a.name}`),
                     },
                     {
                       label: 'Copy chat ID',

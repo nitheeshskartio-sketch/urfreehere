@@ -30,6 +30,8 @@ export interface AccountDoc {
    * never shared with other users.
    */
   links?: AccountLinks;
+  /** Set by the admin: likes and dislikes this person received before this time no longer count. */
+  meterResetAt?: Date;
 }
 
 export interface AccountLinks {
@@ -44,6 +46,8 @@ export interface PublicProfile {
   status: string;
   avatar: string | null;
   updatedAt: number;
+  /** Likes and dislikes given to this person before this time don't count (admin reset). */
+  meterResetAt?: number;
 }
 
 export interface ProfileInput {
@@ -73,6 +77,7 @@ export function toPublic(doc: AccountDoc): PublicProfile {
     status: doc.status,
     avatar: doc.avatar,
     updatedAt: doc.updatedAt.getTime(),
+    ...(doc.meterResetAt ? { meterResetAt: doc.meterResetAt.getTime() } : {}),
   };
 }
 
@@ -197,6 +202,13 @@ export class AccountStore {
   }
 
   /** Resets the inactivity countdown. */
+  /** Admin: likes and dislikes this person received so far stop counting. Returns the reset time. */
+  async resetMeter(userId: string): Promise<number | null> {
+    const at = new Date();
+    const r = await this.col.updateOne({ _id: userId }, { $set: { meterResetAt: at } });
+    return r.matchedCount === 1 ? at.getTime() : null;
+  }
+
   async keepAlive(userId: string) {
     return (await this.col.updateOne({ _id: userId }, { $set: { lastActiveAt: new Date() } })).matchedCount === 1;
   }

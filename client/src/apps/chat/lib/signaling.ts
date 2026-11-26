@@ -49,6 +49,8 @@ export interface AccountInfo {
   status: string;
   avatar: string | null;
   updatedAt: number;
+  /** Likes and dislikes given to this person before this time don't count (admin reset). */
+  meterResetAt?: number;
 }
 
 export interface SignalingHandlers {
@@ -61,6 +63,8 @@ export interface SignalingHandlers {
   onAuthed(account: AccountInfo | null, accountsEnabled: boolean, links: AccountLinks | null): void;
   /** A frame relayed by the server from someone we can't reach directly. */
   onRelay(from: UserId, data: unknown): void;
+  /** The admin cleared someone's likes and dislikes. */
+  onMeterReset(userId: UserId, at: number): void;
 }
 
 const BASE: string = import.meta.env.VITE_SIGNALING_URL || '';
@@ -118,6 +122,9 @@ export class ChatSignaling {
     this.socket.on('group:join-request', (req: JoinRequest) => handlers.onJoinRequest(req));
     this.socket.on('invite:result', (r: InviteResult) => handlers.onInviteResult(r));
     this.socket.on('relay', (p: { from: UserId; data: unknown }) => handlers.onRelay(p.from, p.data));
+    this.socket.on('meter:reset', (p: { userId: UserId; at: number }) => {
+      if (typeof p?.userId === 'string' && Number.isFinite(p.at)) handlers.onMeterReset(p.userId, p.at);
+    });
   }
 
   get online() {

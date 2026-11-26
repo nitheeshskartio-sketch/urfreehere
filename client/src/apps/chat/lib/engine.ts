@@ -313,8 +313,10 @@ export class ChatEngine {
   private promiseReplies = new Map<string, { author: UserId; answer: PromiseAnswer; ts: number }[]>();
   /** conversation -> time of the other person's emoji I've already seen animate */
   private moodSeen = new Map<ConvId, number>();
-  /** conversation -> like/dislike totals each person gave (highest totals win: they only grow) */
-  private meters = new Map<ConvId, Map<UserId, Meter & { ts: number }>>();
+  /** conversation -> running like/dislike totals each person published, in order (totals only grow) */
+  private meters = new Map<ConvId, Map<UserId, (Meter & { ts: number })[]>>();
+  /** person -> admin reset time: likes and dislikes they received before it don't count */
+  private meterResets = new Map<UserId, number>();
   /** Taps not published yet: bundled into one event shortly after the last tap. */
   private meterPending = new Map<UserId, Meter>();
   private meterTimers = new Map<UserId, number>();
@@ -473,6 +475,7 @@ export class ChatEngine {
       this.identity = (await db.get<Identity>('kv', 'identity')) ?? null;
       this.deviceId = (await db.get<string>('kv', 'deviceId')) ?? '';
       this.historyStart = (await db.get<number>('kv', 'historyStart')) ?? 0;
+      for (const [k, v] of Object.entries((await db.get<Record<string, number>>('kv', 'meterResets')) ?? {})) this.meterResets.set(k, v);
       for (const [k, v] of Object.entries((await db.get<Record<string, number>>('kv', 'moodSeen')) ?? {})) this.moodSeen.set(k, v);
       for (const [k, v] of Object.entries((await db.get<Record<string, UserId[]>>('kv', 'restoredGroups')) ?? {})) {
         this.restoredGroups.set(k, v);
@@ -581,6 +584,7 @@ export class ChatEngine {
 
   private async onAuthed(account: AccountInfo | null, enabled: boolean, links: AccountLinks | null = null) {
     this.accountsEnabled = enabled;
+    if (account?.meterResetAt && this.identity) this.setMeterReset(this.identity.userId, account.meterResetAt);
     let loginDone: ((r: 'found') => void) | null = null;
     if (this.authMode === 'login') {
       const waiter = this.loginWaiter;
@@ -652,6 +656,7 @@ export class ChatEngine {
       if (!(await keyMatchesId(p.publicKey, p.userId))) continue;
       found.add(p.userId);
       this.directoryKeys.set(p.userId, p.publicKey as PublicJwk);
+      this.setMeterReset(p.userId, p.meterResetAt);
       this.setProfile(p.userId, p);
       const c = this.contacts.get(p.userId);
       if (c && !c.pub) this.saveContact({ ...c, pub: p.publicKey as PublicJwk });
@@ -704,6 +709,7 @@ export class ChatEngine {
       onJoinRequest: (req) => void this.onJoinRequest(req),
       onInviteResult: (r) => this.onInviteResult(r.groupId, r.accepted, r.by, r.reason),
       onRelay: (from, data) => this.onRelay(from, data),
+      onMeterReset: (userId, at) => this.setMeterReset(userId, at),
       },
       () => ({ mode: this.authMode, profile: this.profile, deviceId: this.deviceId }),
     );
@@ -759,10 +765,9 @@ export class ChatEngine {
     } else if (e.kind === 'meter' && !e.local.deleted) {
       let m = this.meters.get(e.conv);
       if (!m) this.meters.set(e.conv, (m = new Map()));
-      const cur = m.get(e.author);
-      const likes = Math.max(cur?.likes ?? 0, Number(b.likes));
-      const dislikes = Math.max(cur?.dislikes ?? 0, Number(b.dislikes));
-      m.set(e.author, { likes, dislikes, ts: Math.max(cur?.ts ?? 0, e.ts) });
+      const list = m.get(e.author) ?? [];
+      list.push({ likes: Number(b.likes), dislikes: Number(b.dislikes), ts: e.ts });
+      m.set(e.author, list);
     } else if (e.kind === 'mood' && !e.local.deleted) {
       let m = this.moods.get(e.conv);
       if (!m) this.moods.set(e.conv, (m = new Map()));
@@ -2074,9 +2079,38 @@ export class ChatEngine {
 
   /** Likes and dislikes `author` gave in the direct chat with `peer` (mine include taps not sent yet). */
   meterOf(peer: UserId, author: UserId): Meter {
-    const m = this.meters.get(dmId(this.me, peer))?.get(author);
+    const list = this.meters.get(dmId(this.me, peer))?.get(author) ?? [];
+    // After an admin reset of the receiver, only what was given since then counts.
+    const reset = this.meterResets.get(author === this.me ? peer : this.me) ?? 0;
+    let likes = 0, dislikes = 0, baseLikes = 0, baseDislikes = 0;
+    for (const x of list) {
+      likes = Math.max(likes, x.likes);
+      dislikes = Math.max(dislikes, x.dislikes);
+      if (x.ts <= reset) {
+        baseLikes = Math.max(baseLikes, x.likes);
+        baseDislikes = Math.max(baseDislikes, x.dislikes);
+      }
+    }
     const pending = author === this.me ? this.meterPending.get(peer) : undefined;
-    return { likes: (m?.likes ?? 0) + (pending?.likes ?? 0), dislikes: (m?.dislikes ?? 0) + (pending?.dislikes ?? 0) };
+    return { likes: likes - baseLikes + (pending?.likes ?? 0), dislikes: dislikes - baseDislikes + (pending?.dislikes ?? 0) };
+  }
+
+  /** Raw running totals I've published for this person (the base new taps are added to). */
+  private meterTotals(peer: UserId): Meter {
+    const list = this.meters.get(dmId(this.me, peer))?.get(this.me) ?? [];
+    const p = this.meterPending.get(peer);
+    return {
+      likes: list.reduce((n, x) => Math.max(n, x.likes), 0) + (p?.likes ?? 0),
+      dislikes: list.reduce((n, x) => Math.max(n, x.dislikes), 0) + (p?.dislikes ?? 0),
+    };
+  }
+
+  /** The admin cleared someone's likes and dislikes (live notice, their profile, or my own account). */
+  private setMeterReset(userId: UserId, at: number | undefined) {
+    if (!at || at <= (this.meterResets.get(userId) ?? 0)) return;
+    this.meterResets.set(userId, at);
+    void db.put('kv', Object.fromEntries(this.meterResets), 'meterResets');
+    this.notify();
   }
 
   /** Meter drawn around someone's picture: the likes and dislikes I gave them (null when none, or for me). */
@@ -2102,7 +2136,8 @@ export class ChatEngine {
   private async flushMeter(peer: UserId) {
     this.meterTimers.delete(peer);
     if (!this.meterPending.has(peer)) return;
-    const total = this.meterOf(peer, this.me);
+    // Totals stay cumulative (they only grow); a reset is applied when counting, not here.
+    const total = this.meterTotals(peer);
     this.meterPending.delete(peer);
     await this.publish(await this.makeEvent(dmId(this.me, peer), 'meter', { likes: total.likes, dislikes: total.dislikes }));
   }

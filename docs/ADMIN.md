@@ -14,7 +14,7 @@ Open it by **double-clicking the UR Chat logo** (top-left of UR Chat) or by goin
 | Section | What you can do |
 | --- | --- |
 | Overview | Live counts (refreshes every 10 s): chat users online, profiles (new today/this week, active today), Mic rooms and people, Postman transfers, suspended IDs, GIF calls this hour, uptime, memory, load. |
-| Profiles | Search by name, status or chat ID, sort, and page through UR Chat accounts. Per profile: **Edit profile** (name, status, remove picture), **Keep active** (resets the 7-day removal timer), **Copy chat ID**, **Suspend** / **Lift suspension**, **Delete profile**, **Delete and suspend**. **Delete inactive…** removes every profile not active for N days. |
+| Profiles | Search by name, status or chat ID, sort, and page through UR Chat accounts. Per profile: **Edit profile** (name, status, remove picture), **Keep active** (resets the 7-day removal timer), **Clear likes & dislikes** (everything the person has received starts again from zero), **Copy chat ID**, **Suspend** / **Lift suspension**, **Delete profile**, **Delete and suspend**. **Delete inactive…** removes every profile not active for N days. |
 | Suspended | Suspend any chat ID (with a reason) and lift suspensions. A suspended ID is signed out at once and sees "This account has been suspended". It can't connect or create the account again. |
 | Mic rooms | Every live voice room with its participants. **Close room** for everyone, or remove one person. |
 | Controls | On/off switches, applied immediately: new UR Chat accounts, GIFs and stickers, creating Mic rooms, UR Postman transfers. GIF budget with **Reset budget**. |

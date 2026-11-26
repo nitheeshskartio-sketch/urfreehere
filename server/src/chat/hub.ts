@@ -572,6 +572,12 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     onlineGroups: () => groupMembers.size,
     inviteCount: () => invites.count(),
     relayStats: () => ({ enabled: opts.relayMbPerHour > 0, mbPerUserPerHour: opts.relayMbPerHour, mbLastHour: Math.round((relayedBytes / 1048576) * 10) / 10 }),
+    /** Admin reset someone's likes and dislikes: tell them and everyone watching them right away. */
+    meterReset(userId: string, at: number) {
+      const payload = { userId, at };
+      emitTo(userId, 'meter:reset', payload);
+      for (const w of watchers.get(userId) ?? []) emitTo(w, 'meter:reset', payload);
+    },
     /** Admin: tells the device its account was deleted or suspended, then disconnects it. */
     kick(userId: string, reason: 'deleted' | 'banned') {
       const s = sessions.get(userId);
