@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSquare, UserX, X } from 'lucide-react';
 import { Button } from '../../../ui/Button';
 import { Avatar } from '../../../ui/avatar/Avatar';
+import { BlastHost } from '../components/Effects';
 import { LoginCodeDialog } from '../components/LoginCode';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../../../lib/router';
@@ -265,6 +266,7 @@ export default function ChatApp({ path }: { path: string }) {
         <LoginCodeDialog code={e.identity.loginCode} name={e.profile?.name ?? ''} onClose={() => e.dismissLoginCode()} />
       )}
       <Toasts />
+      <BlastHost />
     </div>
   );
 }

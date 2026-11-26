@@ -1,4 +1,4 @@
-import { Check, EyeOff, FileText, Flame, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, Smile, X } from 'lucide-react';
+import { Check, EyeOff, FileText, Flame, Handshake, Heart, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, Smile, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useEngine } from '../hooks';
 import { DOCUMENT_ACCEPT, IMAGE_ACCEPT, classify } from '../lib/media';
@@ -14,7 +14,12 @@ export function Composer({
   convId,
   replyTo,
   onCancelReply,
+  twoPerson = false,
+  onHug,
 }: {
+  /** A direct chat with an accepted contact: hugs and promises are offered. */
+  twoPerson?: boolean;
+  onHug?: () => void;
   /** Files dropped onto the conversation, to preview before sending. */
   dropped?: File[] | null;
   onDroppedHandled?: () => void;
@@ -221,6 +226,22 @@ export function Composer({
                 { label: 'Photos', icon: ImageIcon, onSelect: () => imageInput.current?.click() },
                 { label: 'Document', icon: FileText, onSelect: () => docInput.current?.click() },
                 { label: 'Location', icon: MapPin, onSelect: () => setLocationOpen(true) },
+                { label: 'Virtual hug', icon: Heart, hidden: !twoPerson || !onHug, onSelect: () => onHug?.() },
+                {
+                  label: 'Ask for a promise',
+                  icon: Handshake,
+                  hidden: !twoPerson,
+                  onSelect: () => {
+                    if (!text.trim()) {
+                      e.toast('Type what they should promise, then choose "Ask for a promise" again.');
+                      area.current?.focus();
+                      return;
+                    }
+                    void e.sendPromise(convId, text);
+                    update('');
+                    onCancelReply();
+                  },
+                },
               ]}
             />
           </div>
@@ -238,12 +259,33 @@ export function Composer({
               aria-haspopup="menu"
               className={`flex size-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent-soft ${text.trim() ? 'text-accent' : 'text-muted'}`}
               aria-label={mode === 'secret' ? 'Send secretly' : mode === 'once' ? 'Send as view once' : 'Send'}
-              title={mode === 'normal' ? 'Send (right-click to send secretly or as view once)' : 'Right-click for options'}
+              title={mode === 'normal' ? `Send (right-click to send secretly, as view once${twoPerson ? ' or as a promise' : ''})` : 'Right-click for options'}
             >
               {mode === 'secret' ? <EyeOff className="size-5" /> : mode === 'once' ? <Flame className="size-5" /> : <SendHorizontal className="size-5" />}
             </button>
             {sendMenu && (
               <div role="menu" className="absolute bottom-full right-0 z-40 mb-2 w-[260px] overflow-hidden rounded-lg border border-line bg-panel py-1 shadow-pop">
+                {twoPerson && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!text.trim()}
+                    onClick={() => {
+                      setSendMenu(false);
+                      if (!text.trim()) return;
+                      void e.sendPromise(convId, text);
+                      update('');
+                      onCancelReply();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-subtle disabled:opacity-50 disabled:hover:bg-transparent"
+                  >
+                    <Handshake className="size-4 shrink-0 text-muted" />
+                    <span className="flex-1">
+                      Ask as a promise
+                      <span className="block text-[11.5px] text-muted">The chat pauses until they say Yes or No</span>
+                    </span>
+                  </button>
+                )}
                 {(
                   [
                     ['secret', EyeOff, 'Send secretly', 'Hidden until clicked', 'Ctrl⇧↵'],

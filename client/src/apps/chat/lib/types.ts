@@ -57,7 +57,18 @@ export interface Conversation {
   joining?: JoiningInfo;
 }
 
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood';
+/**
+ * skip: stands in for a message that was never delivered and was purged (keeps the sequence gap-free).
+ * hug: a virtual hug. promise / promise-reply: a promise request and its Yes / No / cancel answer.
+ */
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'promise' | 'promise-reply';
+
+export type PromiseAnswer = 'yes' | 'no' | 'cancel';
+export interface PromiseStatus {
+  status: 'pending' | 'yes' | 'no' | 'cancel';
+  by?: UserId;
+  ts?: number;
+}
 
 /**
  * Emoji each person sets for a direct chat. The other person sees it on your
@@ -99,6 +110,8 @@ export interface StoredEvent extends ChatEvent {
     opened?: boolean;
     /** Handed to at least one peer's data channel. */
     sent?: boolean;
+    /** A received hug whose animation has been shown. */
+    played?: boolean;
   };
 }
 

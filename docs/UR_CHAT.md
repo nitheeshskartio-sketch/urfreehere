@@ -162,6 +162,26 @@ In a direct chat, each person can pick one emoji for the other: from the smiley 
 
 It's a signed chat event (`kind: 'mood'`, body `{ e: emoji | null }`), sent and synced peer to peer like reactions, so it reaches the other person even if they were offline. The latest one from each person wins. No server or AI is involved.
 
+Picking an emoji plays a full-screen "blast" for you. The other person sees it once, the first time they open the chat after you picked or changed it (`moodSeen` in IndexedDB). Each emoji has its own vibe ([lib/vibes.ts](../client/src/apps/chat/lib/vibes.ts)): hearts rise for ❤️, tears fall for 😢, the screen shakes for 😡, snow drifts for 🥶, 💔 breaks apart, and so on. With "reduce motion" switched on, the emoji only fades in and out.
+
+## Virtual hugs
+
+**Send a virtual hug** (chat menu, or 📎 → Virtual hug) sends a `hug` event. The sender sees a short full-screen hug. The receiver gets an interactive one the first time they open the chat: press and hold the 🤗 to squeeze it, then let go or tap **Hug back** to send one back. The hug stays in the chat as a card; tap it to play it again.
+
+## Promises
+
+Type something and choose 📎 → **Ask for a promise** (or right-click Send → Ask as a promise). This sends a `promise` event, and the chat pauses for both people:
+
+- The asked person sees only **No** and **Yes, I promise 🤞** instead of the message box.
+- The asker sees "Waiting for … to answer" and can **Take it back**.
+
+The answer is a `promise-reply` event (`yes`, `no`, or `cancel` from the asker); the first valid answer counts. After it, both can chat normally. Yes shows "🤞 … promised" with a 🤝 blast. No and take-back cross the promise out. Direct chats with accepted contacts only.
+
+## Unsent messages
+
+Messages written while the other person isn't reachable wait on your device ("waiting"). The moment a connection opens, they go out straight away, oldest first, before anything new (`flushOutbox`). If one is still unsent although a later message of yours was already delivered, it would now arrive late and out of order. It's purged instead: removed from your chat and replaced by an empty signed `skip` event with the same sequence number, so the other side's history stays gap-free. A toast says how many were removed.
+
+
 ## Server relay (when a direct connection isn't possible)
 
 Some networks (mobile data, some office or college Wi-Fi) block every direct WebRTC path, and without a TURN server two such people could never connect. If a direct attempt fails (15 s timeout, or ICE "failed"), both devices switch to the **server relay**: the same control messages, sync and file transfers travel as frames over the signaling socket ([lib/relay.ts](../client/src/apps/chat/lib/relay.ts)). The chat header shows "via server".

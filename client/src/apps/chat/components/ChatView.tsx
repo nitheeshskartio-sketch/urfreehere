@@ -6,6 +6,7 @@ import {
   Ban,
   EllipsisVertical,
   Eraser,
+  Heart,
   Info,
   LoaderCircle,
   Pin,
@@ -27,6 +28,9 @@ import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
 import { deleteChatPrompt } from './deleteChat';
 import { MoodBadge, MoodButton } from './Mood';
+import { HugOverlay } from './Effects';
+import { PromiseBar } from './Promise';
+import { emitBlast } from '../lib/engine';
 
 export function ChatView({
   conv,
@@ -58,6 +62,38 @@ export function ChatView({
   const self = e.isSelfChat(conv);
   const contact = conv.peerId ? e.contacts.get(conv.peerId) : undefined;
   const canPost = isGroup ? !!group?.members.has(e.me) && !group.deleted && !conv.joining : contact?.state !== 'blocked';
+  const twoPerson = !isGroup && !self && !!conv.peerId && contact?.state === 'contact';
+  const openPromise = twoPerson ? e.openPromise(conv.id) : null;
+
+  // Hugs: full screen when sent, and for the receiver the first time they see it.
+  const [hug, setHug] = useState<{ incoming: boolean } | null>(null);
+  const sendHug = () => {
+    void e.sendHug(conv.id);
+    setHug({ incoming: false });
+  };
+  const unplayedHug = twoPerson ? e.unplayedHug(conv.id) : undefined;
+  useEffect(() => {
+    if (!unplayedHug || hug || document.visibilityState !== 'visible') return;
+    e.markHugPlayed(unplayedHug);
+    setHug({ incoming: true });
+  }, [unplayedHug, hug, e]);
+
+  useEffect(() => {
+    const replay = (ev: Event) => {
+      const h = e.event(String((ev as CustomEvent).detail));
+      if (h?.conv === conv.id) setHug({ incoming: h.author !== e.me });
+    };
+    window.addEventListener('urchat:hug-replay', replay);
+    return () => window.removeEventListener('urchat:hug-replay', replay);
+  }, [conv.id, e]);
+
+  // Their emoji blasts across the screen the first time I open the chat after they picked or changed it.
+  const unseenMood = twoPerson ? e.unseenMood(conv.peerId!) : null;
+  useEffect(() => {
+    if (!unseenMood || document.visibilityState !== 'visible') return;
+    e.markMoodSeen(conv.peerId!, unseenMood.ts);
+    emitBlast(unseenMood.emoji);
+  }, [unseenMood?.ts, unseenMood?.emoji, conv.peerId, e]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     e.setActive(conv.id);
@@ -192,6 +228,7 @@ export function ChatView({
           trigger={<EllipsisVertical className="size-5" />}
           items={[
             { label: isGroup ? 'Group info' : 'Contact info', icon: Info, onSelect: onInfo },
+            { label: 'Send a virtual hug', icon: Heart, hidden: !twoPerson || !canPost || !!openPromise, onSelect: sendHug },
             { label: 'Invite people', icon: UserPlus, onSelect: onInvite, hidden: !isGroup || !e.isAdmin(conv.groupId!) || !!group?.deleted },
             { label: conv.pinned ? 'Unpin chat' : 'Pin chat', icon: Pin, onSelect: () => e.updateConv(conv.id, { pinned: !conv.pinned }) },
             { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, hidden: self, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
@@ -300,8 +337,27 @@ export function ChatView({
         </p>
       )}
 
-      {canPost ? (
-        <Composer convId={conv.id} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} dropped={dropped} onDroppedHandled={clearDropped} />
+      {hug && (
+        <HugOverlay
+          from={title}
+          incoming={hug.incoming}
+          onHugBack={hug.incoming && canPost ? () => void e.sendHug(conv.id) : undefined}
+          onClose={() => setHug(null)}
+        />
+      )}
+
+      {canPost && openPromise ? (
+        <PromiseBar promise={openPromise} peerName={title} />
+      ) : canPost ? (
+        <Composer
+          convId={conv.id}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          dropped={dropped}
+          onDroppedHandled={clearDropped}
+          twoPerson={twoPerson}
+          onHug={sendHug}
+        />
       ) : (
         <div className="shrink-0 border-t border-line bg-panel px-4 py-4 text-center text-sm text-muted">
           {conv.joining

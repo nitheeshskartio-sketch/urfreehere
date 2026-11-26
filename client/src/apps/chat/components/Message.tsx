@@ -1,6 +1,7 @@
 import { Ban, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatBytes } from '../../../lib/format';
+import { HugCard, PromiseCard } from './Promise';
 import { useEngine, useFileUrl } from '../hooks';
 import type { ViewOnceSnapshot } from '../lib/engine';
 import { formatCoord, mapsLink } from '../lib/geo';
@@ -36,7 +37,7 @@ export function Message({
   const profile = e.profileOf(event.author);
 
   const copy = () => {
-    const value = event.kind === 'text' ? text : event.kind === 'location' ? `${(body as unknown as LocationBody).lat}, ${(body as unknown as LocationBody).lng}` : sanitizeName(body.name);
+    const value = event.kind === 'text' ? text : event.kind === 'promise' ? String(body.text) : event.kind === 'location' ? `${(body as unknown as LocationBody).lat}, ${(body as unknown as LocationBody).lng}` : sanitizeName(body.name);
     void navigator.clipboard?.writeText(value).then(() => e.toast('Copied', 'success'), () => e.toast("Couldn't copy", 'error'));
   };
 
@@ -61,7 +62,7 @@ export function Message({
     void e.deleteForEveryone(event.id).then((how) => how === 'me' && e.toast('Too late to delete for everyone, so it was deleted only for you.'));
   const deleteMe = () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]);
   const react = (r: Reaction) => void e.react(event, r);
-  const noCopy = event.kind === 'image' || event.kind === 'gif' || viewOnce || (secret && !revealed) || revoked;
+  const noCopy = event.kind === 'image' || event.kind === 'gif' || event.kind === 'hug' || viewOnce || (secret && !revealed) || revoked;
   const menuItems = [
     { label: 'Reply', icon: Reply, onSelect: () => onReply(event), hidden: revoked },
     { label: 'Copy', icon: Copy, onSelect: copy, hidden: noCopy },
@@ -123,6 +124,8 @@ export function Message({
               {event.kind === 'file' && <FileContent body={body as unknown as FileBody} />}
               {event.kind === 'location' && <LocationContent body={body as unknown as LocationBody} />}
               {event.kind === 'gif' && <GifContent body={body as unknown as GifBody} />}
+              {event.kind === 'promise' && <PromiseCard event={event} mine={mine} />}
+              {event.kind === 'hug' && <HugCard mine={mine} onReplay={() => window.dispatchEvent(new CustomEvent('urchat:hug-replay', { detail: event.id }))} />}
               </SecretCover>
               )}
             </div>

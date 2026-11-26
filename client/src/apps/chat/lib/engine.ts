@@ -34,6 +34,8 @@ import type {
   Settings,
   StoredEvent,
   UserId,
+  PromiseAnswer,
+  PromiseStatus,
 } from './types';
 
 const MAX_SESSIONS = 40;
@@ -94,7 +96,7 @@ const PURGE_AFTER_MISSING_MS = 24 * 60 * 60 * 1000;
 
 /** Real messages (not group operations, reactions or deletions). */
 export function isMessage(e: { kind: EventKind }) {
-  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood';
+  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply';
 }
 
 /** Applies text size, spacing and clock settings to the page. */
@@ -106,6 +108,16 @@ function applyAppearance(s: Settings) {
 }
 
 /** Marks a message body as secret or view-once. */
+/** The signed event without local state, as sent to peers. */
+function stripEvent(e: StoredEvent): ChatEvent {
+  return { v: e.v, id: e.id, conv: e.conv, author: e.author, seq: e.seq, ts: e.ts, kind: e.kind, body: e.body, replyTo: e.replyTo, sig: e.sig };
+}
+
+/** Plays the full-screen emoji animation (listened to by the chat app). */
+export function emitBlast(emoji: string) {
+  window.dispatchEvent(new CustomEvent('urchat:blast', { detail: emoji }));
+}
+
 function withMode<T extends Record<string, unknown>>(body: T, mode: SendMode): T {
   if (mode === 'secret') (body as Record<string, unknown>).secret = true;
   if (mode === 'once') (body as Record<string, unknown>).viewOnce = true;
@@ -173,6 +185,13 @@ function validEvent(e: unknown): e is ChatEvent {
       return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
     case 'delete':
       return typeof b.target === 'string' && b.target.length <= 64;
+    case 'skip':
+    case 'hug':
+      return Object.keys(b).length === 0;
+    case 'promise':
+      return x.conv.startsWith('dm:') && typeof b.text === 'string' && b.text.trim().length > 0 && b.text.length <= 1000;
+    case 'promise-reply':
+      return x.conv.startsWith('dm:') && typeof b.target === 'string' && b.target.length <= 64 && (b.answer === 'yes' || b.answer === 'no' || b.answer === 'cancel');
     case 'mood':
       // One emoji (possibly with modifiers), or null to clear it.
       return b.e === null || (typeof b.e === 'string' && b.e.length <= 16 && /\p{Extended_Pictographic}/u.test(b.e) && !/[\p{L}\p{N}<>]/u.test(b.e));
@@ -280,6 +299,10 @@ export class ChatEngine {
   private reactions = new Map<string, Map<UserId, { r: Reaction | null; ts: number }>>();
   /** message id -> who deleted it for everyone, and when */
   private revocations = new Map<string, { author: UserId; ts: number }>();
+  /** promise id -> answers received (the first valid one counts) */
+  private promiseReplies = new Map<string, { author: UserId; answer: PromiseAnswer; ts: number }[]>();
+  /** conversation -> time of the other person's emoji I've already seen animate */
+  private moodSeen = new Map<ConvId, number>();
   /** conversation -> emoji each person set for it (latest wins) */
   private moods = new Map<ConvId, Map<UserId, { e: string | null; ts: number }>>();
   private missingSince = new Map<UserId, number>();
@@ -435,6 +458,7 @@ export class ChatEngine {
       this.identity = (await db.get<Identity>('kv', 'identity')) ?? null;
       this.deviceId = (await db.get<string>('kv', 'deviceId')) ?? '';
       this.historyStart = (await db.get<number>('kv', 'historyStart')) ?? 0;
+      for (const [k, v] of Object.entries((await db.get<Record<string, number>>('kv', 'moodSeen')) ?? {})) this.moodSeen.set(k, v);
       for (const [k, v] of Object.entries((await db.get<Record<string, UserId[]>>('kv', 'restoredGroups')) ?? {})) {
         this.restoredGroups.set(k, v);
         this.provisional.add(`g:${k}`);
@@ -713,6 +737,10 @@ export class ChatEngine {
       if (!m) this.reactions.set(String(b.target), (m = new Map()));
       const cur = m.get(e.author);
       if (!cur || cur.ts <= e.ts) m.set(e.author, { r: (b.r as Reaction | null) ?? null, ts: e.ts });
+    } else if (e.kind === 'promise-reply' && !e.local.deleted) {
+      const list = this.promiseReplies.get(String(b.target)) ?? [];
+      list.push({ author: e.author, answer: b.answer as PromiseAnswer, ts: e.ts });
+      this.promiseReplies.set(String(b.target), list);
     } else if (e.kind === 'mood' && !e.local.deleted) {
       let m = this.moods.get(e.conv);
       if (!m) this.moods.set(e.conv, (m = new Map()));
@@ -762,7 +790,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood');
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -876,6 +904,10 @@ export class ChatEngine {
         return b.label ? `Location: ${b.label}` : 'Location';
       case 'gif':
         return b.sticker ? 'Sticker' : 'GIF';
+      case 'hug':
+        return '🤗 Virtual hug';
+      case 'promise':
+        return `🤞 Promise: ${String(b.text)}`;
       case 'op':
         return this.describeOp(e);
       default:
@@ -1117,6 +1149,7 @@ export class ChatEngine {
     this.connectTimers.delete(s.peerId);
     // Over the server relay there's no signed handshake, so include the key (checked against the chat ID).
     s.send({ t: 'hello', v: 1, profile: this.profile, ...(s.viaServer ? { pub: this.identity?.publicJwk } : {}) });
+    void this.flushOutbox(s);
     window.setTimeout(() => void s.detectRoute().then(() => this.notify()), 800);
     this.notify();
   }
@@ -1178,6 +1211,43 @@ export class ChatEngine {
       this.onSessionOpen(s);
     }
     (s as RelaySession).receive(data);
+  }
+
+  /**
+   * Messages I wrote while we weren't connected go out right away, oldest
+   * first. A message that's still unsent although a later one of mine already
+   * went out would now arrive out of order and late: it's purged instead.
+   */
+  private async flushOutbox(s: ChatSession) {
+    let purged = 0;
+    for (const conv of this.sharedConvs(s.peerId)) {
+      const mine = (this.events.get(conv) ?? []).filter((x) => x.author === this.me && !x.local.deleted).sort((a, b) => a.seq - b.seq);
+      const delivered = (x: StoredEvent) => !!x.local.sent || Object.keys(x.local.receipts).length > 0;
+      const lastSent = mine.reduce((n, x) => (delivered(x) ? Math.max(n, x.seq) : n), 0);
+      for (const x of mine) {
+        if (delivered(x)) continue;
+        // Group operations always go out: membership depends on them.
+        if (x.seq < lastSent && x.kind !== 'op') {
+          await this.purgeUnsent(x);
+          if (isMessage(x)) purged++;
+        } else if (s.state === 'open' && s.send({ t: 'event', e: stripEvent(x) })) this.markSent(x);
+      }
+    }
+    if (purged) this.toast(`${purged} unsent message${purged === 1 ? ' was' : 's were'} removed: newer messages had already been delivered.`);
+    this.notify();
+  }
+
+  /**
+   * Replaces a message nobody received with an empty signed "skip" event with
+   * the same sequence number, so the other side's history stays gap-free.
+   */
+  private async purgeUnsent(x: StoredEvent) {
+    const unsigned = { v: 1 as const, id: randomId(), conv: x.conv, author: this.me, seq: x.seq, ts: x.ts, kind: 'skip' as const, body: {}, replyTo: null };
+    const skip: StoredEvent = { ...unsigned, sig: await sign(this.identity!, eventSignable(unsigned)), local: { receipts: {}, sent: false } };
+    x.local.deleted = true;
+    this.queueWrite('events', x.id, x);
+    if (x.kind === 'image' || x.kind === 'file') this.byFile.delete((x.body as unknown as FileBody).fileId);
+    this.store(skip);
   }
 
   private sendTo(peer: UserId, msg: Record<string, unknown>): boolean {
@@ -1293,18 +1363,7 @@ export class ChatEngine {
     const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.opened && !e.local.revoked && e.seq > (Number(vector?.[e.author]) || 0));
     // Group operations first so the receiver can verify the messages that follow.
     want.sort((a, b) => (a.kind === 'op' ? 0 : 1) - (b.kind === 'op' ? 0 : 1) || a.ts - b.ts);
-    const strip = (e: StoredEvent): ChatEvent => ({
-      v: e.v,
-      id: e.id,
-      conv: e.conv,
-      author: e.author,
-      seq: e.seq,
-      ts: e.ts,
-      kind: e.kind,
-      body: e.body,
-      replyTo: e.replyTo,
-      sig: e.sig,
-    });
+    const strip = stripEvent;
     if (!want.length) {
       this.sendTo(peer, { t: 'events', conv, events: [], done: true });
       return;
@@ -1465,6 +1524,9 @@ export class ChatEngine {
 
   private onNewIncoming(e: StoredEvent) {
     if (!isMessage(e)) {
+      if (e.kind === 'promise-reply' && e.author !== this.me && (e.body as Record<string, unknown>).answer === 'yes' && this.activeConv === e.conv && e.ts > this.historyStart) {
+        emitBlast('🤝');
+      }
       if (e.kind !== 'op') this.notify();
       return;
     }
@@ -1652,7 +1714,7 @@ export class ChatEngine {
     const t = text.trim();
     if (!t) return;
     this.typingSent.delete(conv);
-    const err = this.canPost(conv);
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
     if (err) return this.toast(err, 'error');
     for (let i = 0; i < t.length; i += MAX_TEXT) {
       await this.publish(await this.makeEvent(conv, 'text', withMode({ text: t.slice(i, i + MAX_TEXT) }, mode), i === 0 ? replyTo : null));
@@ -1661,7 +1723,7 @@ export class ChatEngine {
   }
 
   async sendGif(conv: ConvId, gif: { id: string; url: string; width: number; height: number; title?: string }, sticker: boolean, replyTo: string | null = null, mode: SendMode = 'normal') {
-    const err = this.canPost(conv);
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
     if (err) return this.toast(err, 'error');
     const body: Record<string, unknown> = { id: gif.id, url: gif.url, width: Math.round(gif.width), height: Math.round(gif.height) };
     if (gif.title) body.title = gif.title.slice(0, 120);
@@ -1672,7 +1734,7 @@ export class ChatEngine {
   }
 
   async sendLocation(conv: ConvId, loc: LocationBody, replyTo: string | null = null, mode: SendMode = 'normal') {
-    const err = this.canPost(conv);
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
     if (err) return this.toast(err, 'error');
     const body: Record<string, unknown> = { lat: +loc.lat.toFixed(6), lng: +loc.lng.toFixed(6) };
     if (loc.accuracy !== undefined) body.accuracy = Math.round(loc.accuracy);
@@ -1683,7 +1745,7 @@ export class ChatEngine {
   }
 
   async sendFiles(conv: ConvId, files: File[], as: FileClass, caption = '', replyTo: string | null = null, mode: SendMode = 'normal') {
-    const err = this.canPost(conv);
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
     if (err) return this.toast(err, 'error');
     for (const [i, file] of files.entries()) {
       const problem = validateOutgoing(file, as);
@@ -1967,6 +2029,92 @@ export class ChatEngine {
     return { counts, mine };
   }
 
+  // ------------------------------------------------------------ hugs & promises
+
+  async sendHug(conv: ConvId) {
+    if (!conv.startsWith('dm:')) return;
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
+    if (err) return this.toast(err, 'error');
+    const e = await this.publish(await this.makeEvent(conv, 'hug', {}));
+    e.local.played = true; // the sender sees it as it's sent
+    this.queueWrite('events', e.id, e);
+    this.acceptIfRequest(conv);
+  }
+
+  /** A received hug in this chat that hasn't been shown full-screen yet. */
+  unplayedHug(conv: ConvId): StoredEvent | undefined {
+    return this.eventsOf(conv).find((x) => x.kind === 'hug' && x.author !== this.me && !x.local.played && !x.local.revoked);
+  }
+
+  markHugPlayed(e: StoredEvent) {
+    if (e.local.played) return;
+    e.local.played = true;
+    this.queueWrite('events', e.id, e);
+  }
+
+  /** Asks the other person to promise something. The chat pauses until they answer Yes or No. */
+  async sendPromise(conv: ConvId, text: string) {
+    const t = text.trim().slice(0, 1000);
+    if (!t || !conv.startsWith('dm:')) return;
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
+    if (err) return this.toast(err, 'error');
+    await this.publish(await this.makeEvent(conv, 'promise', { text: t }));
+    this.acceptIfRequest(conv);
+  }
+
+  /** Who answered a promise, and how. The first valid answer counts: Yes / No from the other person, cancel from the asker. */
+  promiseStatus(p: StoredEvent): PromiseStatus {
+    const replies = [...(this.promiseReplies.get(p.id) ?? [])].sort((a, b) => a.ts - b.ts);
+    for (const r of replies) {
+      if (r.answer === 'cancel' ? r.author === p.author : r.author !== p.author) return { status: r.answer, by: r.author, ts: r.ts };
+    }
+    return { status: 'pending' };
+  }
+
+  /** The unanswered promise that pauses this chat, if any. */
+  openPromise(conv: ConvId): StoredEvent | null {
+    if (!conv.startsWith('dm:')) return null;
+    const list = this.eventsOf(conv);
+    for (let i = list.length - 1; i >= 0; i--) {
+      const x = list[i];
+      if (x.kind === 'promise' && !x.local.revoked && this.promiseStatus(x).status === 'pending') return x;
+    }
+    return null;
+  }
+
+  private promiseLockText(conv: ConvId): string | null {
+    const p = this.openPromise(conv);
+    if (!p) return null;
+    return p.author === this.me ? `Waiting for ${this.nameOf(this.peerOf(conv)!)} to answer your promise.` : 'Answer the promise first: Yes or No.';
+  }
+
+  private peerOf(conv: ConvId): UserId | undefined {
+    return this.convs.get(conv)?.peerId;
+  }
+
+  async answerPromise(p: StoredEvent, answer: PromiseAnswer) {
+    if (p.kind !== 'promise' || this.promiseStatus(p).status !== 'pending') return;
+    if (answer === 'cancel' ? p.author !== this.me : p.author === this.me) return;
+    const err = this.canPost(p.conv);
+    if (err) return this.toast(err, 'error');
+    await this.publish(await this.makeEvent(p.conv, 'promise-reply', { target: p.id, answer }));
+    if (answer === 'yes') emitBlast('🤝');
+  }
+
+  /** The other person's emoji, if it changed since I last saw it animate. */
+  unseenMood(peer: UserId): { emoji: string; ts: number } | null {
+    const conv = dmId(this.me, peer);
+    const m = this.moods.get(conv)?.get(peer);
+    if (!m?.e || m.ts <= (this.moodSeen.get(conv) ?? 0)) return null;
+    return { emoji: m.e, ts: m.ts };
+  }
+
+  markMoodSeen(peer: UserId, ts: number) {
+    const conv = dmId(this.me, peer);
+    this.moodSeen.set(conv, ts);
+    void db.put('kv', Object.fromEntries(this.moodSeen), 'moodSeen');
+  }
+
   /** The emoji `author` set for the direct chat with `peer` (null when none). */
   moodIn(peer: UserId, author: UserId): string | null {
     return this.moods.get(dmId(this.me, peer))?.get(author)?.e ?? null;
@@ -1980,6 +2128,7 @@ export class ChatEngine {
     if (err) return this.toast(err, 'error');
     if (this.moodIn(peer, this.me) === emoji) return;
     await this.publish(await this.makeEvent(conv, 'mood', { e: emoji }));
+    if (emoji) emitBlast(emoji);
   }
 
   /** One reaction per person: picking another replaces it, picking the same removes it. */
