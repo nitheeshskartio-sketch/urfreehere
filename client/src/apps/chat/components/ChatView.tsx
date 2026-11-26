@@ -50,6 +50,7 @@ export function ChatView({
   const title = e.convTitle(conv);
   const group = e.group(conv);
   const isGroup = conv.type === 'group';
+  const self = e.isSelfChat(conv);
   const contact = conv.peerId ? e.contacts.get(conv.peerId) : undefined;
   const canPost = isGroup ? !!group?.members.has(e.me) && !group.deleted && !conv.joining : contact?.state !== 'blocked';
 
@@ -101,6 +102,8 @@ export function ChatView({
       const names = [...group.members.keys()].map((u) => (u === e.me ? 'You' : e.nameOf(u).split(' ')[0]));
       subtitle = `${group.members.size} participants · ${names.slice(0, 6).join(', ')}${names.length > 6 ? '…' : ''}`;
     }
+  } else if (self) {
+    subtitle = 'Only on this device · never sent anywhere';
   } else if (conv.peerId) {
     const st = e.peerStatus(conv.peerId);
     const route = e.routeOf(conv.peerId);
@@ -156,7 +159,7 @@ export function ChatView({
             seed={conv.peerId ?? conv.groupId}
             size={40}
             group={isGroup}
-            online={!isGroup && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
+            online={!isGroup && !self && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
           />
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold">{title}</span>
@@ -178,13 +181,13 @@ export function ChatView({
             { label: isGroup ? 'Group info' : 'Contact info', icon: Info, onSelect: onInfo },
             { label: 'Invite people', icon: UserPlus, onSelect: onInvite, hidden: !isGroup || !e.isAdmin(conv.groupId!) || !!group?.deleted },
             { label: conv.pinned ? 'Unpin chat' : 'Pin chat', icon: Pin, onSelect: () => e.updateConv(conv.id, { pinned: !conv.pinned }) },
-            { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
+            { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, hidden: self, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
             { label: conv.archived ? 'Unarchive' : 'Archive', icon: Archive, onSelect: () => e.updateConv(conv.id, { archived: !conv.archived }) },
             {
               label: 'Block',
               icon: Ban,
               danger: true,
-              hidden: isGroup || contact?.state === 'blocked',
+              hidden: isGroup || self || contact?.state === 'blocked',
               onSelect: () => window.confirm(`Block ${title}? They won't be able to connect to you or send you messages.`) && e.blockUser(conv.peerId!),
             },
             {
@@ -236,7 +239,11 @@ export function ChatView({
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-6">
         {events.length === 0 && !conv.joining && (
           <div className="mx-auto mt-10 max-w-sm rounded-xl bg-panel/80 px-5 py-4 text-center text-sm text-muted shadow-card">
-            {isGroup ? 'No messages yet. Say hello to the group.' : `No messages yet. Messages to ${title} are delivered directly when you're both online.`}
+            {self
+              ? 'Your personal space. Keep notes, links, photos and files here. They stay only on this device and are never sent anywhere.'
+              : isGroup
+                ? 'No messages yet. Say hello to the group.'
+                : `No messages yet. Messages to ${title} are delivered directly when you're both online.`}
           </div>
         )}
         <MessageList events={events} isGroup={isGroup} onReply={setReplyTo} onOpenImage={(id) => setViewer(Math.max(0, images.indexOf(id)))} onJump={jumpTo} />

@@ -46,6 +46,21 @@ function Section({ title, children, action }: { title: string; children: React.R
 function ContactInfo({ conv }: { conv: Conversation }) {
   const e = useEngine();
   const id = conv.peerId!;
+  if (e.isSelfChat(conv)) {
+    return (
+      <div className="flex flex-col items-center px-4 pb-5 pt-6 text-center">
+        <Avatar avatar={e.profile?.avatar} name={e.profile?.name ?? ''} seed={id} size={96} />
+        <h3 className="mt-3 text-lg font-semibold">{e.convTitle(conv)}</h3>
+        <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted">
+          Your personal chat. Everything here is saved only on this device. It isn't sent to anyone, isn't stored on the server, and doesn't notify.
+        </p>
+        <Button variant="ghost" className="mt-4 text-danger" onClick={() => window.confirm('Delete everything in your personal chat from this device?') && void e.clearHistory(conv.id)}>
+          <Trash2 />
+          Delete chat history
+        </Button>
+      </div>
+    );
+  }
   const p = e.profileOf(id);
   const contact = e.contacts.get(id);
   const st = e.peerStatus(id);

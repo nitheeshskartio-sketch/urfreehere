@@ -411,7 +411,10 @@ export class ChatEngine {
     const wasLogin = this.authMode === 'login';
     // Without a confirmed account (server running without MongoDB) keep registering on each login.
     this.authMode = this.registered ? 'resume' : 'create';
-    if (wasLogin) this.status = 'ready';
+    if (wasLogin) {
+      this.status = 'ready';
+      this.ensureSelfChat();
+    }
     this.notify();
     if (wasLogin) loginDone?.('found');
     void this.refreshDirectory();
@@ -459,7 +462,9 @@ export class ChatEngine {
   }
 
   private start() {
-    if (this.signaling || !this.identity) return;
+    if (!this.identity) return;
+    if (this.status === 'ready') this.ensureSelfChat();
+    if (this.signaling) return;
     this.signaling = new ChatSignaling(
       this.identity,
       {
@@ -591,13 +596,41 @@ export class ChatEngine {
     return g ? [...g.members.keys()] : [];
   }
 
+  /** The personal "(You)" chat: notes stored only on this device. */
+  get selfConvId(): ConvId {
+    return dmId(this.me, this.me);
+  }
+
+  isSelfChat(conv: ConvId | Conversation | undefined): boolean {
+    const id = typeof conv === 'string' ? conv : conv?.id;
+    return !!id && !!this.me && id === this.selfConvId;
+  }
+
+  /** Creates the personal chat once, pinned at the top like Teams. Nothing in it is ever sent. */
+  private ensureSelfChat() {
+    if (!this.me || this.convs.has(this.selfConvId)) return;
+    this.saveConv({
+      id: this.selfConvId,
+      type: 'dm',
+      peerId: this.me,
+      pinned: true,
+      muted: true,
+      archived: false,
+      unread: 0,
+      lastTs: Date.now(),
+      createdAt: Date.now(),
+    });
+  }
+
   convTitle(c: Conversation): string {
+    if (this.isSelfChat(c)) return `${this.profile?.name ?? 'Me'} (You)`;
     if (c.type === 'dm') return this.nameOf(c.peerId!);
     const g = this.groups.get(c.groupId!);
     return g?.valid ? g.name : c.joining?.preview.name ?? 'Group';
   }
 
   convImage(c: Conversation): string | null {
+    if (this.isSelfChat(c)) return this.profile?.avatar ?? null;
     if (c.type === 'dm') return this.profiles.get(c.peerId!)?.avatar ?? null;
     const g = this.groups.get(c.groupId!);
     return g?.valid ? g.image : c.joining?.preview.image ?? null;
@@ -656,6 +689,8 @@ export class ChatEngine {
 
   /** Delivery status of my own message for the ticks. */
   deliveryOf(e: StoredEvent): 'waiting' | 'sent' | 'delivered' | 'read' {
+    // Notes to yourself are "read" the moment they're saved.
+    if (this.isSelfChat(e.conv)) return 'read';
     const others = this.participants(e.conv).filter((u) => u !== this.me);
     const statuses = others.map((u) => e.local.receipts[u]);
     if (others.length && statuses.every((s) => s === 'read')) return 'read';
@@ -1498,8 +1533,8 @@ export class ChatEngine {
 
   startDirectChat(peer: UserId): ConvId | null {
     if (peer === this.me) {
-      this.toast("That's your own ID.", 'error');
-      return null;
+      this.ensureSelfChat();
+      return this.selfConvId;
     }
     const c = this.contacts.get(peer);
     if (c?.state === 'request') this.saveContact({ ...c, state: 'contact' });

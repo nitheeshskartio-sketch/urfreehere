@@ -360,7 +360,8 @@ export function initialsColor(key: string) {
 }
 
 export function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  // "Nitheesh (You)" -> "N": ignore a trailing note in brackets.
+  const parts = name.replace(/\s*\([^)]*\)\s*$/, '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }

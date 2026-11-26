@@ -280,7 +280,8 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
   const title = e.convTitle(conv);
   const last = e.lastEvent(conv.id);
   const typing = e.typingIn(conv.id);
-  const online = conv.type === 'dm' ? e.peerStatus(conv.peerId!) !== 'offline' : undefined;
+  const self = e.isSelfChat(conv);
+  const online = conv.type === 'dm' && !self ? e.peerStatus(conv.peerId!) !== 'offline' : undefined;
   const unread = conv.unread > 0 && !conv.muted;
 
   let preview: React.ReactNode = '';
@@ -299,7 +300,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
         </span>
       </span>
     );
-  } else preview = conv.type === 'dm' ? 'No messages yet' : '';
+  } else preview = self ? 'Notes, links and files for yourself' : conv.type === 'dm' ? 'No messages yet' : '';
 
   return (
     <li className="group relative px-2">
@@ -317,7 +318,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
           </span>
           <span className="mt-0.5 flex items-center gap-2">
             <span className={`min-w-0 flex-1 truncate text-[12px] ${unread ? 'font-semibold text-ink' : 'text-muted'}`}>{preview}</span>
-            {conv.muted && <BellOff className="size-3.5 shrink-0 text-muted" aria-label="Muted" />}
+            {conv.muted && !self && <BellOff className="size-3.5 shrink-0 text-muted" aria-label="Muted" />}
             {conv.unread > 0 && (
               <span className={`min-w-5 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white ${conv.muted ? 'bg-muted' : 'bg-danger'}`}>
                 {conv.unread > 99 ? '99+' : conv.unread}
@@ -333,7 +334,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
             trigger={<EllipsisVertical className="size-4" />}
             items={[
               { label: conv.pinned ? 'Unpin' : 'Pin', icon: conv.pinned ? PinOff : Pin, onSelect: () => e.updateConv(conv.id, { pinned: !conv.pinned }) },
-              { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
+              { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, hidden: self, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
               {
                 label: conv.archived ? 'Unarchive' : 'Archive',
                 icon: conv.archived ? ArchiveRestore : Archive,

@@ -101,6 +101,10 @@ Every message is a signed **event**:
 - **Auto-download** applies to files up to 25 MB from contacts and group members. Requests from unknown people never auto-download.
 - **Cancel and retry** are available while a transfer is running. A stalled transfer (30 s idle) fails over to another peer.
 
+## Personal chat "(You)"
+
+Every account has a chat with itself, pinned at the top as "Name (You)", like Teams. Notes, links, photos, documents, GIFs and locations sent there are **stored only on this device**: nothing is sent to peers or to the server, and the chat never notifies. Messages show as read (blue double tick) as soon as they're saved. It's a direct-chat ID with the same user on both sides (`dm:<me>:<me>`), which peers can never write to (direct-chat events require two different participants). Entering your own ID in **New chat** opens it.
+
 ## Notifications
 
 These work like Teams, for **new messages** only. Muted conversations never notify. Messages older than 2 minutes, for example ones caught up after reconnecting, update the counts but don't pop up or play a sound.
