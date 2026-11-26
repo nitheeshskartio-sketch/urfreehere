@@ -55,7 +55,7 @@ export interface Conversation {
   joining?: JoiningInfo;
 }
 
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'op';
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op';
 
 export interface ChatEvent {
   v: 1;
@@ -105,6 +105,16 @@ export interface LocationBody {
   accuracy?: number;
   label?: string;
   current?: boolean;
+}
+
+/** A GIF or sticker from GIPHY; the media loads from GIPHY's servers. */
+export interface GifBody {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+  title?: string;
+  sticker?: boolean;
 }
 
 export interface Settings {

@@ -6,6 +6,7 @@ import { Server, type Socket } from 'socket.io';
 import { AccountStore } from './chat/accounts.js';
 import { attachChat } from './chat/hub.js';
 import { attachMic } from './mic/hub.js';
+import { attachGif } from './gif.js';
 import { config } from './config.js';
 import { buildIceConfig } from './ice.js';
 import { TokenBucket, WindowLimiter } from './rateLimit.js';
@@ -33,7 +34,8 @@ app.use((req, res, next) => {
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      // GIPHY media for GIFs and stickers in UR Chat.
+      "img-src 'self' data: blob: https://*.giphy.com",
       "font-src 'self'",
       "media-src 'self' blob:",
       // 'self' covers same-origin WebSockets in modern browsers; ws:/wss: for older Safari.
@@ -120,6 +122,9 @@ const chat = attachChat(io, app, {
     ? AccountStore.connect(config.chat.mongoUri, config.chat.mongoDb, config.chat.inactiveDays)
     : null,
 });
+
+// --- GIPHY proxy for UR Chat (key stays on the server) --------------------
+attachGif(app, { production: config.isProduction });
 
 // --- Mic voice rooms (namespace /mic + /api/mic) -------------------------
 const mic = attachMic(io, app, { clientIp, production: config.isProduction });

@@ -20,7 +20,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { Menu } from '../../../ui/Menu';
@@ -73,6 +73,11 @@ export function Sidebar({
 
   const archivedCount = all.filter((c) => c.archived && !isRequest(c) && !hiddenGroup(c)).length;
   const requestCount = all.filter(isRequest).length;
+
+  // Leave an emptied Requests/Archived view (e.g. after accepting the last request).
+  useEffect(() => {
+    if ((view === 'requests' && requestCount === 0) || (view === 'archived' && archivedCount === 0)) setView('chats');
+  }, [view, requestCount, archivedCount]);
   const sections: [string, Conversation[]][] =
     view === 'chats'
       ? [

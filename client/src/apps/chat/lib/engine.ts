@@ -121,6 +121,21 @@ function validEvent(e: unknown): e is ChatEvent {
         (b.label === undefined || (typeof b.label === 'string' && b.label.length <= 200)) &&
         (b.accuracy === undefined || (typeof b.accuracy === 'number' && b.accuracy >= 0))
       );
+    case 'gif':
+      return (
+        typeof b.id === 'string' &&
+        b.id.length <= 64 &&
+        typeof b.url === 'string' &&
+        b.url.length <= 600 &&
+        /^https:\/\/(media\d*|i)\.giphy\.com\//.test(b.url) &&
+        Number.isFinite(b.width) &&
+        Number.isFinite(b.height) &&
+        (b.width as number) > 0 &&
+        (b.width as number) <= 2000 &&
+        (b.height as number) > 0 &&
+        (b.height as number) <= 2000 &&
+        (b.title === undefined || (typeof b.title === 'string' && b.title.length <= 120))
+      );
     case 'op':
       return x.conv.startsWith('g:') && typeof b.op === 'string';
     default:
@@ -604,6 +619,8 @@ export class ChatEngine {
         return sanitizeName(b.name);
       case 'location':
         return b.label ? `Location: ${b.label}` : 'Location';
+      case 'gif':
+        return b.sticker ? 'Sticker' : 'GIF';
       case 'op':
         return this.describeOp(e);
     }
@@ -1240,6 +1257,16 @@ export class ChatEngine {
     for (let i = 0; i < t.length; i += MAX_TEXT) {
       await this.publish(await this.makeEvent(conv, 'text', { text: t.slice(i, i + MAX_TEXT) }, i === 0 ? replyTo : null));
     }
+    this.acceptIfRequest(conv);
+  }
+
+  async sendGif(conv: ConvId, gif: { id: string; url: string; width: number; height: number; title?: string }, sticker: boolean, replyTo: string | null = null) {
+    const err = this.canPost(conv);
+    if (err) return this.toast(err, 'error');
+    const body: Record<string, unknown> = { id: gif.id, url: gif.url, width: Math.round(gif.width), height: Math.round(gif.height) };
+    if (gif.title) body.title = gif.title.slice(0, 120);
+    if (sticker) body.sticker = true;
+    await this.publish(await this.makeEvent(conv, 'gif', body, replyTo));
     this.acceptIfRequest(conv);
   }
 

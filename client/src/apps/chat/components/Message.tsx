@@ -1,11 +1,12 @@
 import { Copy, EllipsisVertical, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
 import { formatBytes } from '../../../lib/format';
 import { useEngine, useFileUrl } from '../hooks';
 import { formatCoord, mapsLink } from '../lib/geo';
 import { isEmojiOnly, linkify } from '../lib/linkify';
 import { extOf, sanitizeName } from '../lib/media';
 import { clockTime } from '../lib/time';
-import type { FileBody, LocationBody, StoredEvent } from '../lib/types';
+import type { FileBody, GifBody, LocationBody, StoredEvent } from '../lib/types';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { Menu } from '../../../ui/Menu';
 import { Ticks } from './Ticks';
@@ -38,7 +39,8 @@ export function Message({
     void navigator.clipboard?.writeText(value).then(() => e.toast('Copied', 'success'), () => e.toast("Couldn't copy", 'error'));
   };
 
-  const media = event.kind === 'image' || event.kind === 'location';
+  const sticker = event.kind === 'gif' && !!(body as { sticker?: boolean }).sticker;
+  const media = event.kind === 'image' || event.kind === 'location' || event.kind === 'gif';
   const fullTime = new Date(event.ts).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -57,7 +59,7 @@ export function Message({
           <div className="relative min-w-0" title={fullTime}>
             <div
               className={`min-w-0 ${
-                bigEmoji ? '' : `rounded-md ${media ? 'p-1' : 'px-3 py-2'} ${mine ? 'bg-bubble-own' : 'bg-panel shadow-card'}`
+                bigEmoji || sticker ? '' : `rounded-md ${media ? 'p-1' : 'px-3 py-2'} ${mine ? 'bg-bubble-own' : 'bg-panel shadow-card'}`
               }`}
             >
               {event.replyTo && (
@@ -79,6 +81,7 @@ export function Message({
               {event.kind === 'image' && <ImageContent body={body as unknown as FileBody} onOpen={onOpenImage} />}
               {event.kind === 'file' && <FileContent body={body as unknown as FileBody} />}
               {event.kind === 'location' && <LocationContent body={body as unknown as LocationBody} />}
+              {event.kind === 'gif' && <GifContent body={body as unknown as GifBody} />}
             </div>
             {/* Hover action bar, like Teams */}
             <div
@@ -95,7 +98,7 @@ export function Message({
                 trigger={<EllipsisVertical className="size-4" />}
                 items={[
                   { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
-                  { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' },
+                  { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' || event.kind === 'gif' },
                   {
                     label: 'Delete for me',
                     icon: Trash2,
@@ -115,7 +118,7 @@ export function Message({
               trigger={<EllipsisVertical className="size-4" />}
               items={[
                 { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
-                { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' },
+                { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' || event.kind === 'gif' },
                 { label: 'Delete for me', icon: Trash2, danger: true, onSelect: () => window.confirm('Delete this message from this device?') && void e.deleteLocal([event.id]) },
               ]}
             />
@@ -252,6 +255,23 @@ function LocationContent({ body }: { body: LocationBody }) {
         </span>
       </span>
     </a>
+  );
+}
+
+function GifContent({ body }: { body: GifBody }) {
+  const [failed, setFailed] = useState(false);
+  const w = Math.min(260, body.width);
+  if (failed) return <p className="px-2 py-1.5 text-[13px] text-muted">{body.sticker ? 'Sticker' : 'GIF'} couldn't be loaded.</p>;
+  return (
+    <img
+      src={body.url}
+      alt={body.title || (body.sticker ? 'Sticker' : 'GIF')}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className={`block max-w-full ${body.sticker ? '' : 'rounded'}`}
+      style={{ width: w, aspectRatio: `${body.width} / ${body.height}` }}
+    />
   );
 }
 

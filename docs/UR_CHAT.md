@@ -101,6 +101,18 @@ Every message is a signed **event**:
 - **Auto-download** applies to files up to 25 MB from contacts and group members. Requests from unknown people never auto-download.
 - **Cancel and retry** are available while a transfer is running. A stalled transfer (30 s idle) fails over to another peer.
 
+## GIFs and stickers (GIPHY)
+
+The smiley button in the compose box opens a Teams-style picker with **Emoji**, **GIFs** and **Stickers** tabs.
+
+- **Server proxy:** `GET /api/gif/gifs?q=…` and `/api/gif/stickers?q=…` (empty `q` = trending). The `GIPHY_API_KEY` stays on the server and is never sent to browsers.
+- **Budget:** all users share `GIPHY_HOURLY_LIMIT` upstream calls per rolling hour (100 for a beta key). Trending is cached for 15 minutes and searches for an hour, so repeated requests cost nothing. Searches wait for a 500 ms typing pause and need at least 2 characters. There's also a per-IP limit (40 requests per 10 minutes) so one visitor can't use up the budget for everyone.
+- **When the limit is reached** (ours or GIPHY's own), the picker shows "GIFs are taking a short break … Try again in about N minutes", and cached results are still served.
+- **When GIPHY rejects the key** (401/403), the picker shows that the GIF feature isn't available because the key isn't authorized. The server then stops calling GIPHY for 10 minutes.
+- **Messages:** a GIF is sent as a signed `gif` event that holds only GIPHY's image URL and size. Receivers accept only `https://media*.giphy.com/` or `i.giphy.com` URLs, and the browser loads the image from GIPHY. The CSP allows `img-src https://*.giphy.com`. GIPHY therefore sees the viewers' IP addresses, much like any embedded image.
+- **Content rating:** `GIPHY_RATING` (default `g`).
+- The "Powered by GIPHY" credit and terms link are shown, as GIPHY's terms require.
+
 ## Location
 
 Location uses only the browser's Geolocation API, and only after the user presses **Use my current location**. It can also take coordinates or a link pasted from any maps app. Messages show the coordinates and accuracy, with **Open in Maps**, which opens Apple Maps on iOS or Google Maps elsewhere via a normal link. No map tiles, API keys or third-party requests are involved.
