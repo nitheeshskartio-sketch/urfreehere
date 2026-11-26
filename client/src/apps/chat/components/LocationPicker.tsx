@@ -2,13 +2,24 @@ import { Crosshair, ExternalLink, LoaderCircle, MapPin, Send } from 'lucide-reac
 import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { formatCoord, mapsLink, parseLocationInput } from '../lib/geo';
+import type { SendMode } from '../lib/types';
+import { SendModeChooser } from './SendModeChooser';
 import { Field, Modal, inputClass } from '../../../ui/Modal';
 
 /**
  * Share a location. The browser is asked for the current position only when
  * the user presses "Use my current location".
  */
-export function LocationPicker({ onClose, onSend }: { onClose: () => void; onSend: (loc: { lat: number; lng: number; accuracy?: number; label?: string; current?: boolean }) => void }) {
+export function LocationPicker({
+  onClose,
+  onSend,
+  initialMode = 'normal',
+}: {
+  onClose: () => void;
+  onSend: (loc: { lat: number; lng: number; accuracy?: number; label?: string; current?: boolean }, mode: SendMode) => void;
+  initialMode?: SendMode;
+}) {
+  const [mode, setMode] = useState<SendMode>(initialMode);
   const [pos, setPos] = useState<{ lat: number; lng: number; accuracy?: number; current?: boolean } | null>(null);
   const [label, setLabel] = useState('');
   const [manual, setManual] = useState('');
@@ -55,7 +66,7 @@ export function LocationPicker({ onClose, onSend }: { onClose: () => void; onSen
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={!pos} onClick={() => pos && onSend({ ...pos, label: label.trim() || undefined })}>
+          <Button disabled={!pos} onClick={() => pos && onSend({ ...pos, label: label.trim() || undefined }, mode)}>
             <Send />
             Send location
           </Button>
@@ -116,6 +127,7 @@ export function LocationPicker({ onClose, onSend }: { onClose: () => void; onSen
         <Field label="Label (optional)">
           <input className={inputClass} value={label} onChange={(ev) => setLabel(ev.target.value)} maxLength={200} placeholder="e.g. Meet at the main entrance" />
         </Field>
+        <SendModeChooser value={mode} onChange={setMode} />
       </div>
     </Modal>
   );

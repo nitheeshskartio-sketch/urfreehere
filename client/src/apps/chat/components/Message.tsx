@@ -411,7 +411,12 @@ function ViewOnceViewer({ snapshot, onClose }: { snapshot: ViewOnceSnapshot; onC
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4" onClick={(ev) => ev.target === ev.currentTarget && close()}>
         {snapshot.kind === 'text' && <p className="max-w-2xl whitespace-pre-wrap break-words text-center text-xl leading-relaxed">{String(b.text ?? '')}</p>}
-        {snapshot.kind === 'image' && snapshot.url && <img src={snapshot.url} alt="" className="max-h-full max-w-full select-none object-contain" draggable={false} />}
+        {snapshot.kind === 'image' && snapshot.url && (
+          <figure className="flex max-h-full flex-col items-center gap-3">
+            <img src={snapshot.url} alt="" className="max-h-[80vh] max-w-full select-none object-contain" draggable={false} />
+            {typeof b.caption === 'string' && b.caption && <figcaption className="max-w-xl text-center text-[15px] text-white/85">{b.caption}</figcaption>}
+          </figure>
+        )}
         {snapshot.kind === 'gif' && <img src={String(b.url)} alt="" referrerPolicy="no-referrer" className="max-h-full max-w-full object-contain" />}
         {snapshot.kind === 'file' && snapshot.url && (
           <div className="rounded-lg bg-white/10 p-6 text-center">

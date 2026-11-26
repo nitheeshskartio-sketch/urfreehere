@@ -13,7 +13,7 @@ import {
   Upload,
   UserPlus,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Button } from '../../../ui/Button';
 import { useEngine } from '../hooks';
 import { sanitizeName } from '../lib/media';
@@ -42,6 +42,8 @@ export function ChatView({
   const [replyTo, setReplyTo] = useState<StoredEvent | null>(null);
   const [viewer, setViewer] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [dropped, setDropped] = useState<File[] | null>(null);
+  const clearDropped = useCallback(() => setDropped(null), []);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [showJump, setShowJump] = useState(false);
@@ -126,11 +128,9 @@ export function ChatView({
     ev.preventDefault();
     setDragging(false);
     if (!canPost) return;
+    // Dropped files open the preview, where the caption and Send as mode are chosen.
     const files = Array.from(ev.dataTransfer.files);
-    const imgs = files.filter((f) => /\.(jpe?g|png|webp)$/i.test(f.name));
-    const docs = files.filter((f) => !imgs.includes(f));
-    if (imgs.length) void e.sendFiles(conv.id, imgs, 'image');
-    if (docs.length) void e.sendFiles(conv.id, docs, 'document');
+    if (files.length) setDropped(files);
   };
 
   return (
@@ -270,7 +270,7 @@ export function ChatView({
       )}
 
       {canPost ? (
-        <Composer convId={conv.id} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+        <Composer convId={conv.id} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} dropped={dropped} onDroppedHandled={clearDropped} />
       ) : (
         <div className="shrink-0 border-t border-line bg-panel px-4 py-4 text-center text-sm text-muted">
           {conv.joining

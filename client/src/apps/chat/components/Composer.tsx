@@ -3,15 +3,21 @@ import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } 
 import { useEngine } from '../hooks';
 import { DOCUMENT_ACCEPT, IMAGE_ACCEPT, classify } from '../lib/media';
 import type { SendMode, StoredEvent } from '../lib/types';
+import { AttachmentPreview, type PendingAttachment } from './AttachmentPreview';
 import { ExpressionPicker } from './ExpressionPicker';
 import { LocationPicker } from './LocationPicker';
 import { Menu } from '../../../ui/Menu';
 
 export function Composer({
+  dropped,
+  onDroppedHandled,
   convId,
   replyTo,
   onCancelReply,
 }: {
+  /** Files dropped onto the conversation, to preview before sending. */
+  dropped?: File[] | null;
+  onDroppedHandled?: () => void;
   convId: string;
   replyTo: StoredEvent | null;
   onCancelReply: () => void;
@@ -84,12 +90,32 @@ export function Composer({
     }
   };
 
+  /** Attachments wait in a preview where the caption and Send as mode are chosen. */
+  const [pending, setPending] = useState<PendingAttachment | null>(null);
   const sendFiles = (files: File[], as?: 'image' | 'document') => {
-    if (!files.length) return;
-    const images = files.filter((f) => classify(f.name) === 'image');
-    const docs = files.filter((f) => !images.includes(f));
-    if (as === 'image' || images.length) void e.sendFiles(convId, as === 'image' ? files : images, 'image', '', replyTo?.id ?? null, mode);
-    if (as !== 'image' && docs.length) void e.sendFiles(convId, docs, 'document', '', replyTo?.id ?? null, mode);
+    if (files.length) setPending({ type: 'files', files, as });
+  };
+
+  useEffect(() => {
+    if (dropped?.length) {
+      setPending({ type: 'files', files: dropped });
+      onDroppedHandled?.();
+    }
+  }, [dropped, onDroppedHandled]);
+
+  const sendPending = (p: PendingAttachment, sendMode: SendMode, caption: string) => {
+    const reply = replyTo?.id ?? null;
+    if (p.type === 'gif') {
+      const g = p.gif;
+      void e.sendGif(convId, { id: g.id, url: g.full.url, width: g.full.width, height: g.full.height, title: g.title }, p.sticker, reply, sendMode);
+    } else {
+      const images = p.files.filter((f) => classify(f.name) === 'image');
+      const docs = p.files.filter((f) => !images.includes(f));
+      // The caption goes with the first item sent.
+      if (images.length) void e.sendFiles(convId, images, 'image', caption, reply, sendMode);
+      if (docs.length) void e.sendFiles(convId, docs, 'document', images.length ? '' : caption, images.length ? null : reply, sendMode);
+    }
+    setPending(null);
     onCancelReply();
   };
 
@@ -156,9 +182,8 @@ export function Composer({
           <ExpressionPicker
             onEmoji={insertEmoji}
             onGif={(g, sticker) => {
-              void e.sendGif(convId, { id: g.id, url: g.full.url, width: g.full.width, height: g.full.height, title: g.title }, sticker, replyTo?.id ?? null, mode);
               setEmojiOpen(false);
-              onCancelReply();
+              setPending({ type: 'gif', gif: g, sticker });
             }}
             onClose={() => setEmojiOpen(false)}
           />
@@ -298,11 +323,13 @@ export function Composer({
           ev.target.value = '';
         }}
       />
+      {pending && <AttachmentPreview pending={pending} initialMode={mode} onCancel={() => setPending(null)} onSend={sendPending} />}
       {locationOpen && (
         <LocationPicker
+          initialMode={mode}
           onClose={() => setLocationOpen(false)}
-          onSend={(loc) => {
-            void e.sendLocation(convId, loc, replyTo?.id ?? null, mode);
+          onSend={(loc, sendMode) => {
+            void e.sendLocation(convId, loc, replyTo?.id ?? null, sendMode);
             setLocationOpen(false);
             onCancelReply();
           }}
