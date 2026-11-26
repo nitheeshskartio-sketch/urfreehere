@@ -79,7 +79,7 @@ export function Message({
   return (
     <div className={`group relative flex gap-2.5 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-0.5'}`} id={`m-${event.id}`}>
       {!mine && (
-        <span className="w-8 shrink-0 pt-[22px]">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} />}</span>
+        <span className="w-8 shrink-0 pt-[22px]">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} ring={e.ringFor(event.author)} />}</span>
       )}
       <div className={`flex min-w-0 max-w-[min(82%,640px)] flex-col ${mine ? 'items-end' : 'items-start'}`}>
         {showSender && (

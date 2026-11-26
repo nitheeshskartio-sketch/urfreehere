@@ -94,3 +94,15 @@ export function ProfileMeter({ peer, canTap }: { peer: UserId; canTap: boolean }
     </div>
   );
 }
+
+/** Like / dislike counts shown right after a contact's name (what I gave them). */
+export function MeterInline({ peer }: { peer: UserId }) {
+  const e = useEngine();
+  const m = e.meterOf(peer, e.me);
+  return (
+    <span className="inline-flex shrink-0 items-center gap-2 text-[12.5px] font-semibold tabular-nums" title="Your likes and dislikes for them">
+      <span className="text-success">👍 {fmt(m.likes)}</span>
+      <span className="text-danger">👎 {fmt(m.dislikes)}</span>
+    </span>
+  );
+}

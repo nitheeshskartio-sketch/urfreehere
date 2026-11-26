@@ -29,6 +29,7 @@ import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
 import { deleteChatPrompt } from './deleteChat';
 import { MoodBadge, MoodButton } from './Mood';
+import { MeterInline } from './Meter';
 import { HugOverlay, SlapOverlay } from './Effects';
 import type { Gesture } from '../lib/types';
 import { PromiseBar } from './Promise';
@@ -209,10 +210,14 @@ export function ChatView({
               size={40}
               group={isGroup}
               online={!isGroup && !self && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
+              ring={!isGroup && !self ? e.ringFor(conv.peerId) : null}
             />
           </MoodBadge>
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-semibold">{title}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[15px] font-semibold">{title}</span>
+              {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} />}
+            </span>
             <span className="block truncate text-[12.5px] text-muted">{subtitle}</span>
           </span>
         </button>

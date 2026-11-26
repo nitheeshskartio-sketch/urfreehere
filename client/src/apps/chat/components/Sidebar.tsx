@@ -314,7 +314,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
         aria-current={active ? 'true' : undefined}
       >
         <MoodBadge peer={conv.type === 'dm' && !self && !blocked ? conv.peerId : undefined} size="sm">
-          <Avatar avatar={e.convImage(conv)} name={title} seed={conv.peerId ?? conv.groupId} size={36} group={conv.type === 'group'} online={online} />
+          <Avatar avatar={e.convImage(conv)} name={title} seed={conv.peerId ?? conv.groupId} size={36} group={conv.type === 'group'} online={online} ring={conv.type === 'dm' && !self ? e.ringFor(conv.peerId) : null} />
         </MoodBadge>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">

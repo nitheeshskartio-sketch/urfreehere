@@ -2079,6 +2079,13 @@ export class ChatEngine {
     return { likes: (m?.likes ?? 0) + (pending?.likes ?? 0), dislikes: (m?.dislikes ?? 0) + (pending?.dislikes ?? 0) };
   }
 
+  /** Meter drawn around someone's picture: the likes and dislikes I gave them (null when none, or for me). */
+  ringFor(userId: UserId | undefined): Meter | null {
+    if (!userId || userId === this.me || !this.convs.has(dmId(this.me, userId))) return null;
+    const m = this.meterOf(userId, this.me);
+    return m.likes || m.dislikes ? m : null;
+  }
+
   /** One more like or dislike for this person. Taps in quick succession go out as one update. */
   bumpMeter(peer: UserId, which: 'like' | 'dislike') {
     const conv = dmId(this.me, peer);

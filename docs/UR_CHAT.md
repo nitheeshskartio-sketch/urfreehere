@@ -174,7 +174,7 @@ Picking an emoji plays a full-screen "blast" for you. The other person sees it o
 
 ## Like meter
 
-Right under a contact's name in their profile there's a like meter: a 👍 and a 👎 button with your counts and a bar between them. Tap either as many times as you want; the other person sees your totals on your profile, and the line below shows what they gave you. Quick taps are bundled: the device publishes one signed `meter` event with the new running totals (`{ likes, dislikes }`) about 0.7 s after the last tap, not one per tap. Totals only grow, so the highest values from each person count.
+Right under a contact's name in their profile there's a like meter: a 👍 and a 👎 button with your counts and a bar between them. Tap either as many times as you want; the other person sees your totals on your profile, and the line below shows what they gave you. Your counts also show after their name in the chat header, and every picture of that contact gets a ring that works as the meter: green for the share of likes, red for dislikes (no ring until there's at least one tap). Quick taps are bundled: the device publishes one signed `meter` event with the new running totals (`{ likes, dislikes }`) about 0.7 s after the last tap, not one per tap. Totals only grow, so the highest values from each person count.
 
 ## Promises
 

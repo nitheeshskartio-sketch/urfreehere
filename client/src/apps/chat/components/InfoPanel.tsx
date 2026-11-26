@@ -70,7 +70,7 @@ function ContactInfo({ conv }: { conv: Conversation }) {
   return (
     <>
       <div className="flex flex-col items-center px-4 pb-5 pt-6 text-center">
-        <Avatar avatar={p?.avatar} name={e.nameOf(id)} seed={id} size={96} />
+        <Avatar avatar={p?.avatar} name={e.nameOf(id)} seed={id} size={96} ring={e.ringFor(id)} />
         <h3 className="mt-3 text-lg font-semibold">{e.nameOf(id)}</h3>
         {p?.status && <p className="mt-1 text-sm text-muted">{p.status}</p>}
         {contact?.state === 'contact' && <ProfileMeter peer={id} canTap={e.convs.has(conv.id)} />}
@@ -182,7 +182,7 @@ function GroupInfo({ conv, onInvite, onOpenChat }: { conv: Conversation; onInvit
             return (
               <li key={m.userId} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface">
                 <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => m.userId !== e.me && onOpenChat(m.userId)} disabled={m.userId === e.me}>
-                  <Avatar avatar={e.profileOf(m.userId)?.avatar} name={e.nameOf(m.userId)} seed={m.userId} size={36} online={m.userId === e.me ? undefined : online} />
+                  <Avatar avatar={e.profileOf(m.userId)?.avatar} name={e.nameOf(m.userId)} seed={m.userId} size={36} online={m.userId === e.me ? undefined : online} ring={e.ringFor(m.userId)} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{m.userId === e.me ? 'You' : e.nameOf(m.userId)}</span>
                     <span className="block truncate text-[12px] text-muted">{e.profileOf(m.userId)?.status || formatUserId(m.userId)}</span>

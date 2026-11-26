@@ -10,8 +10,11 @@ export function Avatar({
   size = 40,
   group = false,
   online,
+  ring,
   className = '',
 }: {
+  /** Like / dislike meter drawn as the picture's border: green share for likes, red for dislikes. */
+  ring?: { likes: number; dislikes: number } | null;
   avatar: AvatarRef | undefined;
   name: string;
   seed?: string;
@@ -42,9 +45,30 @@ export function Avatar({
       </span>
     );
   }
+  const total = ring ? ring.likes + ring.dislikes : 0;
+  const pct = total ? (ring!.likes / total) * 100 : 0;
+  const width = Math.max(2, Math.round(size / 14));
   return (
     <span className={`relative inline-block shrink-0 ${className}`} style={style}>
       <span className="block size-full overflow-hidden rounded-full bg-surface">{inner}</span>
+      {total > 0 && (
+        <span
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            inset: -(width + 1),
+            padding: width,
+            background: `conic-gradient(rgb(var(--c-success)) 0 ${pct}%, rgb(var(--c-danger)) ${pct}% 100%)`,
+            // Keep only the ring: cut the middle out.
+            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            WebkitMaskComposite: 'xor',
+            mask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            maskComposite: 'exclude',
+          }}
+          title={`👍 ${ring!.likes} · 👎 ${ring!.dislikes}`}
+          aria-label={`${ring!.likes} likes, ${ring!.dislikes} dislikes`}
+          role="img"
+        />
+      )}
       {online !== undefined && (
         <span
           className={`absolute bottom-0 right-0 rounded-full border-2 border-panel ${online ? 'bg-success' : 'bg-line-strong'}`}

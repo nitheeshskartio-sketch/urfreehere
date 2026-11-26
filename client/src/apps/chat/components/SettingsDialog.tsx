@@ -304,7 +304,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
               <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
                 {blocked.map((c) => (
                   <li key={c.userId} className="flex items-center gap-3 px-3 py-2">
-                    <Avatar avatar={e.profileOf(c.userId)?.avatar} name={e.nameOf(c.userId)} seed={c.userId} size={32} />
+                    <Avatar avatar={e.profileOf(c.userId)?.avatar} name={e.nameOf(c.userId)} seed={c.userId} size={32} ring={e.ringFor(c.userId)} />
                     <span className="min-w-0 flex-1 truncate">{e.nameOf(c.userId)}</span>
                     <Button variant="secondary" size="sm" onClick={() => e.unblockUser(c.userId)}>
                       Unblock
