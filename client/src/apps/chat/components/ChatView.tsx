@@ -6,6 +6,7 @@ import {
   Ban,
   EllipsisVertical,
   Eraser,
+  Hand,
   Heart,
   Info,
   LoaderCircle,
@@ -28,7 +29,8 @@ import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
 import { deleteChatPrompt } from './deleteChat';
 import { MoodBadge, MoodButton } from './Mood';
-import { HugOverlay } from './Effects';
+import { HugOverlay, SlapOverlay } from './Effects';
+import type { Gesture } from '../lib/types';
 import { PromiseBar } from './Promise';
 import { emitBlast } from '../lib/engine';
 
@@ -65,23 +67,23 @@ export function ChatView({
   const twoPerson = !isGroup && !self && !!conv.peerId && contact?.state === 'contact';
   const openPromise = twoPerson ? e.openPromise(conv.id) : null;
 
-  // Hugs: full screen when sent, and for the receiver the first time they see it.
-  const [hug, setHug] = useState<{ incoming: boolean } | null>(null);
-  const sendHug = () => {
-    void e.sendHug(conv.id);
-    setHug({ incoming: false });
+  // Hugs and slaps: full screen when sent, and for the receiver the first time they see it.
+  const [gesture, setGesture] = useState<{ kind: Gesture; incoming: boolean } | null>(null);
+  const sendGesture = (kind: Gesture) => {
+    void e.sendGesture(conv.id, kind);
+    setGesture({ kind, incoming: false });
   };
-  const unplayedHug = twoPerson ? e.unplayedHug(conv.id) : undefined;
+  const unplayed = twoPerson ? e.unplayedGesture(conv.id) : undefined;
   useEffect(() => {
-    if (!unplayedHug || hug || document.visibilityState !== 'visible') return;
-    e.markHugPlayed(unplayedHug);
-    setHug({ incoming: true });
-  }, [unplayedHug, hug, e]);
+    if (!unplayed || gesture || document.visibilityState !== 'visible') return;
+    e.markPlayed(unplayed);
+    setGesture({ kind: unplayed.kind as Gesture, incoming: true });
+  }, [unplayed, gesture, e]);
 
   useEffect(() => {
     const replay = (ev: Event) => {
       const h = e.event(String((ev as CustomEvent).detail));
-      if (h?.conv === conv.id) setHug({ incoming: h.author !== e.me });
+      if (h?.conv === conv.id && (h.kind === 'hug' || h.kind === 'slap')) setGesture({ kind: h.kind, incoming: h.author !== e.me });
     };
     window.addEventListener('urchat:hug-replay', replay);
     return () => window.removeEventListener('urchat:hug-replay', replay);
@@ -228,7 +230,8 @@ export function ChatView({
           trigger={<EllipsisVertical className="size-5" />}
           items={[
             { label: isGroup ? 'Group info' : 'Contact info', icon: Info, onSelect: onInfo },
-            { label: 'Send a virtual hug', icon: Heart, hidden: !twoPerson || !canPost || !!openPromise, onSelect: sendHug },
+            { label: 'Send a virtual hug', icon: Heart, hidden: !twoPerson || !canPost || !!openPromise, onSelect: () => sendGesture('hug') },
+            { label: 'Send a virtual slap', icon: Hand, hidden: !twoPerson || !canPost || !!openPromise, onSelect: () => sendGesture('slap') },
             { label: 'Invite people', icon: UserPlus, onSelect: onInvite, hidden: !isGroup || !e.isAdmin(conv.groupId!) || !!group?.deleted },
             { label: conv.pinned ? 'Unpin chat' : 'Pin chat', icon: Pin, onSelect: () => e.updateConv(conv.id, { pinned: !conv.pinned }) },
             { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, hidden: self, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
@@ -337,12 +340,20 @@ export function ChatView({
         </p>
       )}
 
-      {hug && (
+      {gesture?.kind === 'hug' && (
         <HugOverlay
           from={title}
-          incoming={hug.incoming}
-          onHugBack={hug.incoming && canPost ? () => void e.sendHug(conv.id) : undefined}
-          onClose={() => setHug(null)}
+          incoming={gesture.incoming}
+          onHugBack={gesture.incoming && canPost ? () => void e.sendGesture(conv.id, 'hug') : undefined}
+          onClose={() => setGesture(null)}
+        />
+      )}
+      {gesture?.kind === 'slap' && (
+        <SlapOverlay
+          from={title}
+          incoming={gesture.incoming}
+          onSlapBack={gesture.incoming && canPost ? () => void e.sendGesture(conv.id, 'slap') : undefined}
+          onClose={() => setGesture(null)}
         />
       )}
 
@@ -356,7 +367,7 @@ export function ChatView({
           dropped={dropped}
           onDroppedHandled={clearDropped}
           twoPerson={twoPerson}
-          onHug={sendHug}
+          onGesture={sendGesture}
         />
       ) : (
         <div className="shrink-0 border-t border-line bg-panel px-4 py-4 text-center text-sm text-muted">

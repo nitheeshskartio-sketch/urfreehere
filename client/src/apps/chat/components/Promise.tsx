@@ -81,14 +81,14 @@ export function PromiseCard({ event, mine }: { event: StoredEvent; mine: boolean
   );
 }
 
-/** A hug inside the conversation; tap to see it again. */
-export function HugCard({ mine, onReplay }: { mine: boolean; onReplay: () => void }) {
+/** A hug or slap inside the conversation; tap to see it again. */
+export function GestureCard({ kind, mine, onReplay }: { kind: 'hug' | 'slap'; mine: boolean; onReplay: () => void }) {
   return (
     <button type="button" onClick={onReplay} className="flex items-center gap-3 text-left" title="Play again">
-      <span className="text-4xl leading-none">🤗</span>
+      <span className="text-4xl leading-none">{kind === 'hug' ? '🤗' : '🖐️'}</span>
       <span>
-        <span className="block font-semibold">Virtual hug</span>
-        <span className="block text-[12.5px] text-muted">{mine ? 'You sent a hug' : 'Tap to feel it again'}</span>
+        <span className="block font-semibold">{kind === 'hug' ? 'Virtual hug' : 'Virtual slap'}</span>
+        <span className="block text-[12.5px] text-muted">{mine ? `You sent a ${kind}` : 'Tap to feel it again'}</span>
       </span>
     </button>
   );

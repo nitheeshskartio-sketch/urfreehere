@@ -36,6 +36,8 @@ import type {
   UserId,
   PromiseAnswer,
   PromiseStatus,
+  Gesture,
+  Meter,
 } from './types';
 
 const MAX_SESSIONS = 40;
@@ -96,7 +98,7 @@ const PURGE_AFTER_MISSING_MS = 24 * 60 * 60 * 1000;
 
 /** Real messages (not group operations, reactions or deletions). */
 export function isMessage(e: { kind: EventKind }) {
-  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply';
+  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter';
 }
 
 /** Applies text size, spacing and clock settings to the page. */
@@ -187,7 +189,15 @@ function validEvent(e: unknown): e is ChatEvent {
       return typeof b.target === 'string' && b.target.length <= 64;
     case 'skip':
     case 'hug':
+    case 'slap':
       return Object.keys(b).length === 0;
+    case 'meter':
+      return (
+        x.conv.startsWith('dm:') &&
+        Number.isInteger(b.likes) && (b.likes as number) >= 0 && (b.likes as number) <= 1e9 &&
+        Number.isInteger(b.dislikes) && (b.dislikes as number) >= 0 && (b.dislikes as number) <= 1e9 &&
+        Object.keys(b).length === 2
+      );
     case 'promise':
       return x.conv.startsWith('dm:') && typeof b.text === 'string' && b.text.trim().length > 0 && b.text.length <= 1000;
     case 'promise-reply':
@@ -303,6 +313,11 @@ export class ChatEngine {
   private promiseReplies = new Map<string, { author: UserId; answer: PromiseAnswer; ts: number }[]>();
   /** conversation -> time of the other person's emoji I've already seen animate */
   private moodSeen = new Map<ConvId, number>();
+  /** conversation -> like/dislike totals each person gave (highest totals win: they only grow) */
+  private meters = new Map<ConvId, Map<UserId, Meter & { ts: number }>>();
+  /** Taps not published yet: bundled into one event shortly after the last tap. */
+  private meterPending = new Map<UserId, Meter>();
+  private meterTimers = new Map<UserId, number>();
   /** conversation -> emoji each person set for it (latest wins) */
   private moods = new Map<ConvId, Map<UserId, { e: string | null; ts: number }>>();
   private missingSince = new Map<UserId, number>();
@@ -741,6 +756,13 @@ export class ChatEngine {
       const list = this.promiseReplies.get(String(b.target)) ?? [];
       list.push({ author: e.author, answer: b.answer as PromiseAnswer, ts: e.ts });
       this.promiseReplies.set(String(b.target), list);
+    } else if (e.kind === 'meter' && !e.local.deleted) {
+      let m = this.meters.get(e.conv);
+      if (!m) this.meters.set(e.conv, (m = new Map()));
+      const cur = m.get(e.author);
+      const likes = Math.max(cur?.likes ?? 0, Number(b.likes));
+      const dislikes = Math.max(cur?.dislikes ?? 0, Number(b.dislikes));
+      m.set(e.author, { likes, dislikes, ts: Math.max(cur?.ts ?? 0, e.ts) });
     } else if (e.kind === 'mood' && !e.local.deleted) {
       let m = this.moods.get(e.conv);
       if (!m) this.moods.set(e.conv, (m = new Map()));
@@ -790,7 +812,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply');
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -906,6 +928,8 @@ export class ChatEngine {
         return b.sticker ? 'Sticker' : 'GIF';
       case 'hug':
         return '🤗 Virtual hug';
+      case 'slap':
+        return '🖐️ Virtual slap';
       case 'promise':
         return `🤞 Promise: ${String(b.text)}`;
       case 'op':
@@ -2031,22 +2055,52 @@ export class ChatEngine {
 
   // ------------------------------------------------------------ hugs & promises
 
-  async sendHug(conv: ConvId) {
+  async sendGesture(conv: ConvId, kind: Gesture) {
     if (!conv.startsWith('dm:')) return;
     const err = this.canPost(conv) ?? this.promiseLockText(conv);
     if (err) return this.toast(err, 'error');
-    const e = await this.publish(await this.makeEvent(conv, 'hug', {}));
+    const e = await this.publish(await this.makeEvent(conv, kind, {}));
     e.local.played = true; // the sender sees it as it's sent
     this.queueWrite('events', e.id, e);
     this.acceptIfRequest(conv);
   }
 
-  /** A received hug in this chat that hasn't been shown full-screen yet. */
-  unplayedHug(conv: ConvId): StoredEvent | undefined {
-    return this.eventsOf(conv).find((x) => x.kind === 'hug' && x.author !== this.me && !x.local.played && !x.local.revoked);
+  /** A received hug or slap in this chat that hasn't been shown full-screen yet. */
+  unplayedGesture(conv: ConvId): StoredEvent | undefined {
+    return this.eventsOf(conv).find((x) => (x.kind === 'hug' || x.kind === 'slap') && x.author !== this.me && !x.local.played && !x.local.revoked);
   }
 
-  markHugPlayed(e: StoredEvent) {
+  // ------------------------------------------------------------- like meter
+
+  /** Likes and dislikes `author` gave in the direct chat with `peer` (mine include taps not sent yet). */
+  meterOf(peer: UserId, author: UserId): Meter {
+    const m = this.meters.get(dmId(this.me, peer))?.get(author);
+    const pending = author === this.me ? this.meterPending.get(peer) : undefined;
+    return { likes: (m?.likes ?? 0) + (pending?.likes ?? 0), dislikes: (m?.dislikes ?? 0) + (pending?.dislikes ?? 0) };
+  }
+
+  /** One more like or dislike for this person. Taps in quick succession go out as one update. */
+  bumpMeter(peer: UserId, which: 'like' | 'dislike') {
+    const conv = dmId(this.me, peer);
+    if (!this.convs.has(conv) || this.canPost(conv)) return;
+    const p = this.meterPending.get(peer) ?? { likes: 0, dislikes: 0 };
+    if (which === 'like') p.likes++;
+    else p.dislikes++;
+    this.meterPending.set(peer, p);
+    this.notify();
+    window.clearTimeout(this.meterTimers.get(peer));
+    this.meterTimers.set(peer, window.setTimeout(() => void this.flushMeter(peer), 700));
+  }
+
+  private async flushMeter(peer: UserId) {
+    this.meterTimers.delete(peer);
+    if (!this.meterPending.has(peer)) return;
+    const total = this.meterOf(peer, this.me);
+    this.meterPending.delete(peer);
+    await this.publish(await this.makeEvent(dmId(this.me, peer), 'meter', { likes: total.likes, dislikes: total.dislikes }));
+  }
+
+  markPlayed(e: StoredEvent) {
     if (e.local.played) return;
     e.local.played = true;
     this.queueWrite('events', e.id, e);

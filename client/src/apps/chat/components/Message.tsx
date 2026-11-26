@@ -1,7 +1,7 @@
 import { Ban, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatBytes } from '../../../lib/format';
-import { HugCard, PromiseCard } from './Promise';
+import { GestureCard, PromiseCard } from './Promise';
 import { useEngine, useFileUrl } from '../hooks';
 import type { ViewOnceSnapshot } from '../lib/engine';
 import { formatCoord, mapsLink } from '../lib/geo';
@@ -62,7 +62,7 @@ export function Message({
     void e.deleteForEveryone(event.id).then((how) => how === 'me' && e.toast('Too late to delete for everyone, so it was deleted only for you.'));
   const deleteMe = () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]);
   const react = (r: Reaction) => void e.react(event, r);
-  const noCopy = event.kind === 'image' || event.kind === 'gif' || event.kind === 'hug' || viewOnce || (secret && !revealed) || revoked;
+  const noCopy = event.kind === 'image' || event.kind === 'gif' || event.kind === 'hug' || event.kind === 'slap' || viewOnce || (secret && !revealed) || revoked;
   const menuItems = [
     { label: 'Reply', icon: Reply, onSelect: () => onReply(event), hidden: revoked },
     { label: 'Copy', icon: Copy, onSelect: copy, hidden: noCopy },
@@ -125,7 +125,9 @@ export function Message({
               {event.kind === 'location' && <LocationContent body={body as unknown as LocationBody} />}
               {event.kind === 'gif' && <GifContent body={body as unknown as GifBody} />}
               {event.kind === 'promise' && <PromiseCard event={event} mine={mine} />}
-              {event.kind === 'hug' && <HugCard mine={mine} onReplay={() => window.dispatchEvent(new CustomEvent('urchat:hug-replay', { detail: event.id }))} />}
+              {(event.kind === 'hug' || event.kind === 'slap') && (
+                <GestureCard kind={event.kind} mine={mine} onReplay={() => window.dispatchEvent(new CustomEvent('urchat:hug-replay', { detail: event.id }))} />
+              )}
               </SecretCover>
               )}
             </div>

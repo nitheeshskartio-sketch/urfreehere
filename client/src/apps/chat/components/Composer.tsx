@@ -1,4 +1,4 @@
-import { Check, EyeOff, FileText, Flame, Handshake, Heart, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, Smile, X } from 'lucide-react';
+import { Check, EyeOff, FileText, Flame, Hand, Handshake, Heart, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, Smile, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useEngine } from '../hooks';
 import { DOCUMENT_ACCEPT, IMAGE_ACCEPT, classify } from '../lib/media';
@@ -15,11 +15,11 @@ export function Composer({
   replyTo,
   onCancelReply,
   twoPerson = false,
-  onHug,
+  onGesture,
 }: {
   /** A direct chat with an accepted contact: hugs and promises are offered. */
   twoPerson?: boolean;
-  onHug?: () => void;
+  onGesture?: (kind: 'hug' | 'slap') => void;
   /** Files dropped onto the conversation, to preview before sending. */
   dropped?: File[] | null;
   onDroppedHandled?: () => void;
@@ -226,7 +226,8 @@ export function Composer({
                 { label: 'Photos', icon: ImageIcon, onSelect: () => imageInput.current?.click() },
                 { label: 'Document', icon: FileText, onSelect: () => docInput.current?.click() },
                 { label: 'Location', icon: MapPin, onSelect: () => setLocationOpen(true) },
-                { label: 'Virtual hug', icon: Heart, hidden: !twoPerson || !onHug, onSelect: () => onHug?.() },
+                { label: 'Virtual hug', icon: Heart, hidden: !twoPerson || !onGesture, onSelect: () => onGesture?.('hug') },
+                { label: 'Virtual slap', icon: Hand, hidden: !twoPerson || !onGesture, onSelect: () => onGesture?.('slap') },
                 {
                   label: 'Ask for a promise',
                   icon: Handshake,

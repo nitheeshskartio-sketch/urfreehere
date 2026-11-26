@@ -168,6 +168,14 @@ Picking an emoji plays a full-screen "blast" for you. The other person sees it o
 
 **Send a virtual hug** (chat menu, or 📎 → Virtual hug) sends a `hug` event. The sender sees a short full-screen hug. The receiver gets an interactive one the first time they open the chat: press and hold the 🤗 to squeeze it, then let go or tap **Hug back** to send one back. The hug stays in the chat as a card; tap it to play it again.
 
+## Virtual slaps
+
+**Send a virtual slap** (chat menu, or 📎 → Virtual slap) sends a `slap` event. The hand swings in with a screen shake, a "SLAP!" burst and a dizzy face. The receiver sees it full-screen the first time they open the chat, can tap the face to feel it again (a hit counter goes up), and can **Slap back**. It stays in the chat as a card that replays it.
+
+## Like meter
+
+The contact info has a **Like meter**. Tap **Like** or **Dislike** as many times as you want, and the other person sees your totals on your profile. You see theirs, and your totals for them also show under their name. Quick taps are bundled: the device publishes one signed `meter` event with the new running totals (`{ likes, dislikes }`) about 0.7 s after the last tap, not one per tap. Totals only grow, so the highest values from each person count.
+
 ## Promises
 
 Type something and choose 📎 → **Ask for a promise** (or right-click Send → Ask as a promise). This sends a `promise` event, and the chat pauses for both people:

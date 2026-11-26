@@ -256,3 +256,144 @@ export function HugOverlay({ from, incoming, onHugBack, onClose }: { from: strin
     </div>
   );
 }
+
+/**
+ * Full-screen virtual slap. The hand swings in with a shake, a "SLAP!" burst
+ * and a dizzy face. Received slaps are interactive: tap the face to slap it
+ * again, or "Slap back" to send one back.
+ */
+export function SlapOverlay({ from, incoming, onSlapBack, onClose }: { from: string; incoming: boolean; onSlapBack?: () => void; onClose: () => void }) {
+  const stage = useRef<HTMLDivElement>(null);
+  const hand = useRef<HTMLSpanElement>(null);
+  const face = useRef<HTMLButtonElement>(null);
+  const word = useRef<HTMLSpanElement>(null);
+  const fx = useRef<HTMLDivElement>(null);
+  const [faceEmoji, setFaceEmoji] = useState('😳');
+  const [hits, setHits] = useState(0);
+  const [sentBack, setSentBack] = useState(false);
+
+  const slap = () => {
+    const still = reduceMotion();
+    const fromRight = Math.random() < 0.5 ? 1 : -1;
+    setHits((n) => n + 1);
+    if (still) {
+      setFaceEmoji('😵‍💫');
+      return;
+    }
+    hand.current?.animate(
+      [
+        { transform: `translate(${fromRight * 70}vw, -10vh) rotate(${fromRight * 40}deg) scale(1.4)`, opacity: 0 },
+        { transform: `translate(${fromRight * 70}px, 0) rotate(${fromRight * -20}deg) scale(1.2)`, opacity: 1, offset: 0.45 },
+        { transform: `translate(${fromRight * 40}px, 10px) rotate(${fromRight * -35}deg) scale(1.1)`, opacity: 1, offset: 0.6 },
+        { transform: `translate(${fromRight * -40}vw, 20vh) rotate(${fromRight * -70}deg) scale(1)`, opacity: 0 },
+      ],
+      { duration: 650, easing: 'cubic-bezier(.5,0,.2,1)' },
+    );
+    window.setTimeout(() => {
+      setFaceEmoji(['😵', '😵‍💫', '🤕', '😖', '🫨'][Math.floor(Math.random() * 5)]);
+      stage.current?.animate(
+        [0, -22, 18, -14, 10, -6, 3, 0].map((x, i) => ({ transform: `translate(${x}px, ${i % 2 ? 6 : -6}px)` })),
+        { duration: 450 },
+      );
+      face.current?.animate(
+        [{ transform: 'scale(1) rotate(0deg)' }, { transform: `scale(0.85) rotate(${fromRight * -18}deg)` }, { transform: 'scale(1) rotate(0deg)' }],
+        { duration: 500, easing: 'ease-out' },
+      );
+      word.current?.animate(
+        [
+          { transform: `scale(0.2) rotate(${fromRight * -12}deg)`, opacity: 0 },
+          { transform: `scale(1.3) rotate(${fromRight * 6}deg)`, opacity: 1, offset: 0.3 },
+          { transform: 'scale(1.1) rotate(0deg)', opacity: 1, offset: 0.7 },
+          { transform: 'scale(1.6)', opacity: 0 },
+        ],
+        { duration: 900, easing: 'ease-out' },
+      );
+      // Impact stars and a red flash.
+      const box = fx.current;
+      if (!box) return;
+      box.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 500 });
+      for (let i = 0; i < 12; i++) {
+        const s = document.createElement('span');
+        s.textContent = ['💥', '⭐', '💫', '✨'][i % 4];
+        s.className = 'absolute left-1/2 top-1/2 text-3xl';
+        stage.current?.appendChild(s);
+        const a = rand(0, Math.PI * 2);
+        const d = rand(90, 220);
+        s.animate(
+          [
+            { transform: 'translate(-50%, -50%) scale(0.3)', opacity: 1 },
+            { transform: `translate(calc(-50% + ${Math.cos(a) * d}px), calc(-50% + ${Math.sin(a) * d}px)) scale(1.1) rotate(${rand(-90, 90)}deg)`, opacity: 0 },
+          ],
+          { duration: rand(500, 900), easing: 'cubic-bezier(.2,.7,.3,1)' },
+        ).finished.then(() => s.remove(), () => s.remove());
+      }
+    }, 290);
+  };
+
+  useEffect(() => {
+    slap();
+    const t = incoming ? undefined : window.setTimeout(onClose, 2200);
+    const esc = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('keydown', esc);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const slapBack = () => {
+    if (sentBack || !onSlapBack) return;
+    setSentBack(true);
+    slap();
+    onSlapBack();
+    window.setTimeout(onClose, 1300);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] grid place-items-center overflow-hidden bg-[radial-gradient(circle_at_center,rgb(251_191_36/0.35),rgb(239_68_68/0.35)_50%,rgb(0_0_0/0.6))] p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={incoming ? `${from} slapped you` : `You slapped ${from}`}
+      onClick={(ev) => ev.target === ev.currentTarget && onClose()}
+    >
+      <div ref={fx} className="pointer-events-none absolute inset-0 bg-red-500 opacity-0" aria-hidden />
+      <button type="button" onClick={onClose} className="absolute right-4 top-4 z-10 rounded-full bg-black/30 p-2 text-white hover:bg-black/50" aria-label="Close">
+        <X className="size-5" />
+      </button>
+      <div ref={stage} className="relative flex flex-col items-center text-center text-white">
+        <button
+          ref={face}
+          type="button"
+          onClick={() => incoming && slap()}
+          className={`select-none text-[130px] leading-none drop-shadow-xl sm:text-[170px] ${incoming ? 'cursor-pointer' : 'cursor-default'}`}
+          aria-label={incoming ? 'Tap to slap again' : 'Slap'}
+        >
+          {faceEmoji}
+        </button>
+        <span ref={hand} className="pointer-events-none absolute left-1/2 top-[18%] -ml-12 text-[110px] leading-none opacity-0 sm:text-[140px]" aria-hidden>
+          🖐️
+        </span>
+        <span
+          ref={word}
+          className="pointer-events-none absolute -top-6 text-6xl font-black italic tracking-tight text-yellow-300 opacity-0 [text-shadow:0_4px_0_rgb(185_28_28),0_0_24px_rgb(0_0_0/0.4)] sm:text-7xl"
+          aria-hidden
+        >
+          SLAP!
+        </span>
+        <p className="mt-4 text-2xl font-semibold drop-shadow">
+          {incoming ? (sentBack ? `You slapped ${from} back` : `${from} slapped you!`) : `You slapped ${from}`}
+          {hits > 1 && <span className="ml-2 text-yellow-200">×{hits}</span>}
+        </p>
+        {incoming && !sentBack && (
+          <>
+            <p className="mt-1 text-[15px] text-white/85">Tap the face to feel it again</p>
+            <button type="button" onClick={slapBack} className="mt-5 rounded-full bg-white px-6 py-2.5 text-[15px] font-semibold text-red-600 shadow-lg hover:bg-red-50">
+              Slap back 🖐️
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
