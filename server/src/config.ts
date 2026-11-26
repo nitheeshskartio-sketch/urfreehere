@@ -79,6 +79,11 @@ export const config = {
   /** Password for the admin console (/admin). Empty disables it. Never sent to browsers. */
   adminPassword: env.ADMIN_PASSWORD || '',
 
+  /** Claude API key for UR Chat's Connection feature. Empty disables the feature. */
+  anthropicApiKey: env.ANTHROPIC_API_KEY || '',
+  /** Most Connection analyses per hour across the whole server (cost guard). */
+  connectionHourlyLimit: int('CONNECTION_AI_HOURLY_LIMIT', 200),
+
   chat: {
     /** MongoDB for UR Chat accounts (profiles only). Leave empty to run without accounts. */
     mongoUri: env.MONGODB_URI || '',
@@ -99,6 +104,9 @@ export const config = {
     /** Shared secret for time-limited TURN REST credentials (coturn `use-auth-secret`). Preferred. */
     turnSecret: env.TURN_SECRET || '',
     turnCredentialTtl: int('TURN_CREDENTIAL_TTL_SECONDS', 6 * 60 * 60),
+    /** Cloudflare Realtime TURN (managed, free tier): key ID and API token from the Cloudflare dashboard. */
+    cloudflareTurnKeyId: env.CLOUDFLARE_TURN_KEY_ID || '',
+    cloudflareTurnToken: env.CLOUDFLARE_TURN_API_TOKEN || '',
     /** "all" (default) or "relay" to force TURN, useful for testing. */
     transportPolicy: env.ICE_TRANSPORT_POLICY === 'relay' ? ('relay' as const) : ('all' as const),
   },

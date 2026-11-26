@@ -141,6 +141,28 @@ export default function ChatApp({ path }: { path: string }) {
       </div>
     );
   }
+  if (e.status === 'signed-out') {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
+        <div className="max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card" role="alert">
+          <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-warning-soft text-warning">
+            <UserX className="size-6" />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold">Signed in on another device</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            Your login code was used to sign in somewhere else. UR Chat works on one device at a time, so this device was signed out and its chats were removed.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted">If that wasn't you, sign in again with your login code right away.</p>
+          <Button className="mt-5 w-full" onClick={() => window.location.assign('/chat/login')}>
+            Sign in with login code
+          </Button>
+          <Button variant="ghost" className="mt-2 w-full" onClick={() => window.location.assign('/chat')}>
+            Create a new account
+          </Button>
+        </div>
+      </div>
+    );
+  }
   if (e.status === 'expired') {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">

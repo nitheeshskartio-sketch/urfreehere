@@ -18,6 +18,23 @@ export interface AccountDoc {
   createdAt: Date;
   updatedAt: Date;
   lastActiveAt: Date;
+  /**
+   * The one device (browser) signed in to this account. Signing in with the
+   * login code elsewhere replaces it; the old device then can't reconnect.
+   * Never shared with other users.
+   */
+  deviceId?: string;
+  /**
+   * Who this account chats with: contact IDs and group IDs with their member
+   * IDs. Lets a new device rebuild the chat list. Never message content, and
+   * never shared with other users.
+   */
+  links?: AccountLinks;
+}
+
+export interface AccountLinks {
+  contacts: { id: string; blocked: boolean }[];
+  groups: { id: string; members: string[] }[];
 }
 
 export interface PublicProfile {
@@ -107,6 +124,14 @@ export class AccountStore {
     return doc!;
   }
 
+  async setLinks(userId: string, links: AccountLinks) {
+    await this.col.updateOne({ _id: userId }, { $set: { links } });
+  }
+
+  async setDevice(userId: string, deviceId: string) {
+    await this.col.updateOne({ _id: userId }, { $set: { deviceId } });
+  }
+
   async updateProfile(userId: string, profile: ProfileInput): Promise<AccountDoc | null> {
     const now = new Date();
     return this.col.findOneAndUpdate({ _id: userId }, { $set: { ...profile, updatedAt: now, lastActiveAt: now } }, { returnDocument: 'after' });
@@ -186,6 +211,11 @@ export class AccountStore {
 
   async unban(userId: string) {
     await this.bans.deleteOne({ _id: userId });
+  }
+
+  /** Another collection in the same database (used by features that keep small per-pair records). */
+  collection<T extends { _id: string }>(name: string): Collection<T> {
+    return this.db.collection<T>(name);
   }
 
   async loadSetting<T>(key: string): Promise<T | null> {

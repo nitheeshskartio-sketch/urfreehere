@@ -14,7 +14,7 @@ import {
 import { createIdentity, identityFromCode, isPublicJwk, keyMatchesId, sign, signable, verify, type Identity } from './identity';
 import { AUTO_DOWNLOAD_LIMIT, MAX_FILE_SIZE, classify, imageInfo, isRealImage, mimeFor, sanitizeName, validateOutgoing, type FileClass } from './media';
 import { PeerSession } from './peer';
-import { ChatSignaling, lookupInvite, type AccountInfo, type AuthMode, type InviteLookup, type JoinRequest, type SignalData, type SignalingStatus } from './signaling';
+import { ChatSignaling, lookupInvite, type AccountInfo, type AccountLinks, type AuthMode, type InviteLookup, type JoinRequest, type SignalData, type SignalingStatus } from './signaling';
 import type {
   ChatEvent,
   Contact,
@@ -34,6 +34,7 @@ import type {
   StoredEvent,
   UserId,
 } from './types';
+import type { ConnectionView } from './connection';
 
 const MAX_SESSIONS = 40;
 const MAX_STRANGER_SESSIONS = 6;
@@ -68,7 +69,19 @@ export interface ViewOnceSnapshot {
   url?: string;
 }
 
-export type EngineStatus = 'loading' | 'onboarding' | 'ready' | 'expired' | 'unsupported' | 'error';
+/** "signed-out": the login code was used on another device, so this one's data was erased. */
+export type EngineStatus = 'loading' | 'onboarding' | 'ready' | 'expired' | 'unsupported' | 'error' | 'signed-out';
+
+/** Failed connection attempts (while the person is online) before showing "can't connect". */
+const UNREACHABLE_AFTER = 2;
+const CONNECTION_SETTLE_MS = 8000;
+const CONNECTION_MIN_TEXTS = 6;
+const CONNECTION_MIN_NEW = 3;
+const CONNECTION_WINDOW = 40;
+
+function pickView(v: ConnectionView): ConnectionView {
+  return { available: !!v.available, state: v.state ?? null };
+}
 
 export function dmId(a: UserId, b: UserId): ConvId {
   return a < b ? `dm:${a}:${b}` : `dm:${b}:${a}`;
@@ -213,6 +226,17 @@ interface FileRequest {
  */
 export class ChatEngine {
   status: EngineStatus = 'loading';
+  /** Random ID of this browser profile, so the server can tell devices apart (tabs share it). */
+  private deviceId = '';
+  /**
+   * On a device signed in with the login code: messages from before this time
+   * stay hidden (the new device starts fresh, even when peers sync old history).
+   */
+  private historyStart = 0;
+  /** Groups restored from the server's chat list, with members to fetch the group from, until it's confirmed. */
+  private restoredGroups = new Map<string, UserId[]>();
+  private linksTimer: number | undefined;
+  private lastLinks = '';
   /** Browser features that are missing when status is "unsupported". */
   unsupportedReason: string[] = [];
   /** Whether the server keeps accounts (MongoDB configured). */
@@ -252,6 +276,8 @@ export class ChatEngine {
   invites = new Map<string, LocalInvite[]>();
   toasts: Toast[] = [];
   activeConv: ConvId | null = null;
+  /** Connection (AI emotional connection) per direct-chat peer, as last reported by the server. */
+  connections = new Map<UserId, ConnectionView>();
 
   private events = new Map<ConvId, StoredEvent[]>();
   /** message id -> reactions by author (latest wins) */
@@ -273,6 +299,8 @@ export class ChatEngine {
   private typingSent = new Map<ConvId, number>();
   private provisional = new Set<ConvId>();
   private groupLocks = new Map<string, Promise<void>>();
+  private connLoading = new Set<UserId>();
+  private connTimers = new Map<UserId, number>();
   private signaling: ChatSignaling | null = null;
   private listeners = new Set<() => void>();
   private writeQueue = new Map<string, { store: 'events' | 'convs' | 'contacts'; value: unknown }>();
@@ -337,6 +365,62 @@ export class ChatEngine {
   private saveContact(c: Contact) {
     this.contacts.set(c.userId, c);
     this.queueWrite('contacts', c.userId, c);
+    this.queueLinks();
+  }
+
+  // ------------------------------------------------------------ chat list
+
+  /** Who I chat with (IDs only), kept on the server so a device signed in with the login code can rebuild the list. */
+  private currentLinks(): AccountLinks {
+    const contacts = [...this.contacts.values()]
+      .filter((c) => c.userId !== this.me && (c.state === 'contact' || c.state === 'blocked'))
+      .map((c) => ({ id: c.userId, blocked: c.state === 'blocked' }))
+      .slice(0, 1000);
+    const groups = new Map<string, UserId[]>(this.restoredGroups);
+    for (const g of this.groups.values()) if (g.members.has(this.me) && !g.deleted) groups.set(g.groupId, [...g.members.keys()].filter((m) => m !== this.me));
+    for (const g of this.groups.values()) if (g.deleted || (g.valid && !g.members.has(this.me) && !this.restoredGroups.has(g.groupId))) groups.delete(g.groupId);
+    return { contacts, groups: [...groups].slice(0, 300).map(([id, members]) => ({ id, members: members.slice(0, 64) })) };
+  }
+
+  private queueLinks(delay = 3000) {
+    if (!this.identity || this.status === 'signed-out') return;
+    window.clearTimeout(this.linksTimer);
+    this.linksTimer = window.setTimeout(() => void this.pushLinks(), delay);
+  }
+
+  private async pushLinks() {
+    const links = this.currentLinks();
+    const key = JSON.stringify(links);
+    if (key === this.lastLinks || !this.signaling?.online) return;
+    if (await this.signaling.pushLinks(links)) this.lastLinks = key;
+  }
+
+  private saveRestoredGroups() {
+    void db.put('kv', Object.fromEntries(this.restoredGroups), 'restoredGroups');
+  }
+
+  /**
+   * Signed in with the login code on a new device: rebuild the chat list from
+   * the server (contacts and groups only). Earlier messages stay hidden.
+   */
+  private async restoreLinks(links: AccountLinks | null) {
+    this.historyStart = Date.now();
+    await db.put('kv', this.historyStart, 'historyStart');
+    if (!links) return;
+    for (const c of links.contacts) {
+      if (c.id === this.me || this.contacts.has(c.id)) continue;
+      if (c.blocked) this.saveContact({ userId: c.id, state: 'blocked', addedAt: Date.now() });
+      else this.ensureDm(c.id, 'contact');
+    }
+    for (const g of links.groups) {
+      const id = `g:${g.id}`;
+      if (this.convs.has(id)) continue;
+      this.saveConv({ id, type: 'group', groupId: g.id, pinned: false, muted: false, archived: false, unread: 0, lastTs: Date.now(), createdAt: Date.now() });
+      this.provisional.add(id);
+      this.restoredGroups.set(g.id, g.members);
+    }
+    this.saveRestoredGroups();
+    this.refreshWatch();
   }
 
   // ------------------------------------------------------------- lifecycle
@@ -353,6 +437,16 @@ export class ChatEngine {
     }
     try {
       this.identity = (await db.get<Identity>('kv', 'identity')) ?? null;
+      this.deviceId = (await db.get<string>('kv', 'deviceId')) ?? '';
+      this.historyStart = (await db.get<number>('kv', 'historyStart')) ?? 0;
+      for (const [k, v] of Object.entries((await db.get<Record<string, UserId[]>>('kv', 'restoredGroups')) ?? {})) {
+        this.restoredGroups.set(k, v);
+        this.provisional.add(`g:${k}`);
+      }
+      if (!this.deviceId) {
+        this.deviceId = randomId(18);
+        await db.put('kv', this.deviceId, 'deviceId');
+      }
       this.profile = (await db.get<Profile>('kv', 'profile')) ?? null;
       this.settings = { ...this.settings, ...((await db.get<Settings>('kv', 'settings')) ?? {}) };
       applyAppearance(this.settings);
@@ -450,7 +544,7 @@ export class ChatEngine {
     this.start();
   }
 
-  private async onAuthed(account: AccountInfo | null, enabled: boolean) {
+  private async onAuthed(account: AccountInfo | null, enabled: boolean, links: AccountLinks | null = null) {
     this.accountsEnabled = enabled;
     let loginDone: ((r: 'found') => void) | null = null;
     if (this.authMode === 'login') {
@@ -484,9 +578,13 @@ export class ChatEngine {
     // Without a confirmed account (server running without MongoDB) keep registering on each login.
     this.authMode = this.registered ? 'resume' : 'create';
     if (wasLogin) {
+      await this.restoreLinks(links);
       this.status = 'ready';
       this.ensureSelfChat();
     }
+    this.queueLinks(0);
+    // Updates may have been missed while offline: views reload when next shown.
+    this.connections.clear();
     this.notify();
     if (wasLogin) loginDone?.('found');
     void this.refreshDirectory();
@@ -541,12 +639,13 @@ export class ChatEngine {
     this.signaling = new ChatSignaling(
       this.identity,
       {
-      onAuthed: (account, enabled) => void this.onAuthed(account, enabled),
+      onAuthed: (account, enabled, links) => void this.onAuthed(account, enabled, links),
       onStatus: (s) => {
         if (s === 'missing') {
           this.removedByAdmin = !!this.signaling?.removedByAdmin;
           return this.onAccountMissing();
         }
+        if (s === 'device-replaced') return void this.signedInElsewhere();
         if (s === 'banned' || s === 'signups-closed') {
           this.blocked = s;
           this.net = 'offline';
@@ -571,8 +670,9 @@ export class ChatEngine {
       onPresence: (userId, online) => this.onPresence(userId, online),
       onJoinRequest: (req) => void this.onJoinRequest(req),
       onInviteResult: (r) => this.onInviteResult(r.groupId, r.accepted, r.by, r.reason),
+      onConnection: (peerId, view) => this.onConnection(peerId, view),
       },
-      () => ({ mode: this.authMode, profile: this.profile }),
+      () => ({ mode: this.authMode, profile: this.profile, deviceId: this.deviceId }),
     );
     this.signaling.start();
     if (this.listenersAttached) return;
@@ -662,7 +762,7 @@ export class ChatEngine {
 
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
-    const cut = c?.clearedBefore ?? 0;
+    const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
     return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete');
   }
 
@@ -683,6 +783,8 @@ export class ChatEngine {
   peerStatus(userId: UserId): PeerStatus {
     const s = this.sessions.get(userId);
     if (s?.state === 'open') return 'connected';
+    // Don't show "connecting…" forever when attempts keep failing.
+    if (this.presence.get(userId) && (this.reconnect.get(userId)?.attempts ?? 0) >= UNREACHABLE_AFTER) return 'unreachable';
     if (s?.state === 'connecting') return 'connecting';
     return this.presence.get(userId) ? 'online' : 'offline';
   }
@@ -839,6 +941,7 @@ export class ChatEngine {
       if (!g.members.has(this.me) || g.deleted) continue;
       for (const m of g.members.keys()) set.add(m);
     }
+    for (const members of this.restoredGroups.values()) for (const m of members) if (!this.isBlocked(m)) set.add(m);
     set.delete(this.me);
     return set;
   }
@@ -919,6 +1022,21 @@ export class ChatEngine {
   }
 
   private connectTimers = new Map<UserId, { timer: number; tries: number }>();
+
+  /** "Try again": forget earlier failures and connect now. */
+  retryPeer(peer: UserId) {
+    const r = this.reconnect.get(peer);
+    if (r?.timer) window.clearTimeout(r.timer);
+    this.reconnect.delete(peer);
+    const t = this.connectTimers.get(peer);
+    if (t) window.clearTimeout(t.timer);
+    this.connectTimers.delete(peer);
+    this.lastConnectAsk.delete(peer);
+    const s = this.sessions.get(peer);
+    if (s && s.state !== 'open') s.close('restart');
+    this.maybeConnect(peer);
+    this.notify();
+  }
 
   /** Retries a connection later while the peer is online and we still have no open channel. */
   private scheduleConnect(peer: UserId, delay: number) {
@@ -1092,6 +1210,8 @@ export class ChatEngine {
     for (const c of this.convs.values()) {
       if (c.type !== 'group' || !c.groupId) continue;
       const g = this.groups.get(c.groupId);
+      const restored = this.restoredGroups.get(c.groupId);
+      if (restored && !restored.includes(peer)) continue; // only its members can have the log
       if ((g?.members.has(peer) && g.members.has(this.me)) || c.joining || this.provisional.has(c.id)) out.push(c.id);
     }
     return out;
@@ -1155,6 +1275,7 @@ export class ChatEngine {
       if (c?.groupId && !this.isMember(c.groupId) && !c.joining) {
         this.convs.delete(conv);
         void db.delete('convs', conv);
+        if (this.restoredGroups.delete(c.groupId)) this.saveRestoredGroups();
       }
       this.provisional.delete(conv);
       this.notify();
@@ -1231,10 +1352,12 @@ export class ChatEngine {
     if (!conv && e.conv.startsWith('dm:')) conv = this.ensureDm(e.author === this.me ? e.conv.slice(3).split(':').find((u) => u !== this.me)! : e.author, 'request');
     if (!conv) return;
     const next = { ...conv };
-    const msg = isMessage(e);
+    // Messages from before this device's sign-in stay hidden: no time bump, no unread.
+    const msg = isMessage(e) && e.ts > this.historyStart;
     if (msg && e.ts > next.lastTs) next.lastTs = e.ts;
     // A deleted chat comes back when a new message arrives.
     if (msg && next.hidden && e.ts > (next.clearedBefore ?? 0)) next.hidden = false;
+    if (e.kind === 'text' && next.type === 'dm' && next.peerId && next.peerId !== this.me) this.connectionActivity(next.peerId);
     if (e.author !== this.me && msg && !(this.activeConv === e.conv && document.visibilityState === 'visible')) {
       next.unread += 1;
       if (next.archived && !next.muted) next.archived = false;
@@ -1257,6 +1380,8 @@ export class ChatEngine {
       const before = this.groups.get(groupId);
       const state = await deriveGroup(groupId, ops);
       this.groups.set(groupId, state);
+      if (state.members.has(this.me) && this.restoredGroups.delete(groupId)) this.saveRestoredGroups();
+      this.queueLinks();
       const conv = this.convs.get(`g:${groupId}`);
       if (conv?.joining && state.members.has(this.me)) {
         this.saveConv({ ...conv, joining: undefined });
@@ -1295,6 +1420,7 @@ export class ChatEngine {
       if (e.kind !== 'op') this.notify();
       return;
     }
+    if (e.ts <= this.historyStart) return this.notify(); // old history synced to a new device: hidden
     for (const l of this.incomingListeners) l(e);
     const conv = this.convs.get(e.conv);
     const accepted = e.conv.startsWith('g:') || this.contacts.get(e.author)?.state === 'contact';
@@ -1472,6 +1598,69 @@ export class ChatEngine {
     if (!g?.members.has(this.me)) return "You're no longer a member of this group.";
     if (g.deleted) return 'This group was deleted.';
     return null;
+  }
+
+  // ------------------------------------------------------------- connection
+
+  /** Current Connection view for a direct-chat peer; starts loading it the first time. */
+  connectionOf(peer: UserId): ConnectionView | undefined {
+    const v = this.connections.get(peer);
+    if (!v) void this.loadConnection(peer);
+    return v;
+  }
+
+  private async loadConnection(peer: UserId) {
+    if (!this.signaling?.online || this.connLoading.has(peer) || peer === this.me) return;
+    this.connLoading.add(peer);
+    try {
+      this.onConnection(peer, pickView(await this.signaling.connectionGet(peer)));
+    } catch {
+      /* retried the next time the chat is shown */
+    } finally {
+      this.connLoading.delete(peer);
+    }
+  }
+
+  private onConnection(peer: UserId, view: ConnectionView) {
+    this.connections.set(peer, view);
+    this.notify();
+    // Nothing read yet: there may already be enough history to read.
+    if (view.available && !view.state) this.scheduleConnection(peer, 1500);
+  }
+
+  /** A text message was added to a direct chat: read the tone again once the conversation settles. */
+  private connectionActivity(peer: UserId) {
+    const v = this.connections.get(peer);
+    if (!v) return void this.loadConnection(peer);
+    if (v.available) this.scheduleConnection(peer, CONNECTION_SETTLE_MS);
+  }
+
+  private scheduleConnection(peer: UserId, delay: number) {
+    window.clearTimeout(this.connTimers.get(peer));
+    this.connTimers.set(peer, window.setTimeout(() => void this.runConnection(peer), delay));
+  }
+
+  private async runConnection(peer: UserId) {
+    this.connTimers.delete(peer);
+    const v = this.connections.get(peer);
+    // Only chats with accepted contacts: never message requests or blocked people.
+    if (!v?.available || !this.signaling?.online || this.contacts.get(peer)?.state !== 'contact') return;
+    // Text only. "Secret" and view-once messages were meant to vanish, so they're never sent.
+    const texts = this.eventsOf(dmId(this.me, peer)).filter(
+      (x) => x.kind === 'text' && !x.local.revoked && !x.body.secret && !x.body.viewOnce && typeof x.body.text === 'string',
+    );
+    const since = v.state?.updatedAt ?? 0;
+    const fresh = texts.filter((x) => x.ts > since).length;
+    const bothSpoke = new Set(texts.slice(-CONNECTION_WINDOW).map((x) => x.author)).size === 2;
+    // Message count alone never moves the score; this only decides when a new reading is worth it.
+    if (!bothSpoke || texts.length < CONNECTION_MIN_TEXTS || (v.state && fresh < CONNECTION_MIN_NEW)) return;
+    const messages = texts.slice(-CONNECTION_WINDOW).map((x) => ({ from: x.author, text: String(x.body.text), ts: x.ts }));
+    try {
+      const res = await this.signaling.connectionAnalyze(peer, messages);
+      if (res.skipped && res.retryIn) this.scheduleConnection(peer, res.retryIn + 1000);
+    } catch {
+      /* the server backs off after a failure; the next message tries again */
+    }
   }
 
   async sendText(conv: ConvId, text: string, replyTo: string | null = null, mode: SendMode = 'normal') {
@@ -1926,6 +2115,23 @@ export class ChatEngine {
     this.settings = { ...this.settings, ...patch };
     await db.put('kv', this.settings, 'settings');
     applyAppearance(this.settings);
+    this.notify();
+  }
+
+  /**
+   * The login code was used on another device. One device at a time: this one
+   * loses access, and its chats, files and identity are erased.
+   */
+  private async signedInElsewhere() {
+    if (this.status === 'signed-out') return;
+    for (const s of this.sessions.values()) s.close('wipe');
+    this.signaling?.close();
+    this.signaling = null;
+    for (const url of this.fileUrls.values()) URL.revokeObjectURL(url);
+    await db.destroy().catch(() => {});
+    this.identity = null;
+    this.profile = null;
+    this.status = 'signed-out';
     this.notify();
   }
 

@@ -17,6 +17,8 @@ export interface SiteSettings {
   micCreateEnabled: boolean;
   /** New UR Postman transfers can be started. */
   postmanEnabled: boolean;
+  /** Connection (AI emotional connection score) in UR Chat direct chats. */
+  connectionAiEnabled: boolean;
   announcement: Announcement | null;
 }
 
@@ -25,6 +27,7 @@ export const settings: SiteSettings = {
   gifsEnabled: true,
   micCreateEnabled: true,
   postmanEnabled: true,
+  connectionAiEnabled: true,
   announcement: null,
 };
 
@@ -38,7 +41,7 @@ export function publicSettings() {
 }
 
 export function applySettings(patch: Partial<SiteSettings>) {
-  for (const k of ['signupsOpen', 'gifsEnabled', 'micCreateEnabled', 'postmanEnabled'] as const) {
+  for (const k of ['signupsOpen', 'gifsEnabled', 'micCreateEnabled', 'postmanEnabled', 'connectionAiEnabled'] as const) {
     if (typeof patch[k] === 'boolean') settings[k] = patch[k]!;
   }
   if (patch.announcement === null) settings.announcement = null;

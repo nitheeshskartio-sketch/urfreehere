@@ -1,6 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import { sign, type Identity } from './identity';
 import type { UserId } from './types';
+import type { ConnectionView } from './connection';
 
 export interface IceConfig {
   iceServers: RTCIceServer[];
@@ -30,9 +31,16 @@ export interface InviteResult {
   reason?: string;
 }
 
-export type SignalingStatus = 'connecting' | 'online' | 'offline' | 'replaced' | 'missing' | 'banned' | 'signups-closed';
+/** "device-replaced": someone signed in with the login code on another device; this one lost access. */
+export type SignalingStatus = 'connecting' | 'online' | 'offline' | 'replaced' | 'missing' | 'banned' | 'signups-closed' | 'device-replaced';
 
 export type AuthMode = 'create' | 'login' | 'resume';
+
+/** Contact and group IDs the server keeps for the next device (no messages). */
+export interface AccountLinks {
+  contacts: { id: UserId; blocked: boolean }[];
+  groups: { id: string; members: UserId[] }[];
+}
 
 /** Account as stored on the server (MongoDB): profile and basic details only. */
 export interface AccountInfo {
@@ -51,7 +59,9 @@ export interface SignalingHandlers {
   onJoinRequest(req: JoinRequest): void;
   onInviteResult(result: InviteResult): void;
   /** Logged in. `account` is null when the server runs without accounts. */
-  onAuthed(account: AccountInfo | null, accountsEnabled: boolean): void;
+  onAuthed(account: AccountInfo | null, accountsEnabled: boolean, links: AccountLinks | null): void;
+  /** Connection changed for a direct chat (either person switched it, or a new result). */
+  onConnection(peerId: UserId, view: ConnectionView): void;
 }
 
 const BASE: string = import.meta.env.VITE_SIGNALING_URL || '';
@@ -59,7 +69,8 @@ const TIMEOUT = 10_000;
 
 /**
  * Connection to the UR Chat signaling hub. Carries presence, WebRTC
- * handshakes and invitation requests only — never message content.
+ * handshakes and invitation requests. Message content is never sent, except
+ * recent direct-chat text for the Connection feature.
  */
 export class ChatSignaling {
   private socket: Socket;
@@ -74,7 +85,7 @@ export class ChatSignaling {
   constructor(
     private readonly identity: Identity,
     private readonly handlers: SignalingHandlers,
-    private readonly authInfo: () => { mode: AuthMode; profile: unknown },
+    private readonly authInfo: () => { mode: AuthMode; profile: unknown; deviceId: string },
   ) {
     this.socket = io(`${BASE}/chat`, {
       autoConnect: false,
@@ -89,11 +100,11 @@ export class ChatSignaling {
       if (!this.replaced) handlers.onStatus('offline');
     });
     this.socket.on('connect_error', () => handlers.onStatus('offline'));
-    this.socket.on('session:replaced', () => {
+    this.socket.on('session:replaced', (p?: { reason?: string }) => {
       this.authed = false;
       this.replaced = true;
       this.socket.io.opts.reconnection = false;
-      handlers.onStatus('replaced');
+      handlers.onStatus(p?.reason === 'new-device' ? 'device-replaced' : 'replaced');
     });
     this.socket.on('admin:removed', (p: { reason?: string }) => {
       this.authed = false;
@@ -107,6 +118,10 @@ export class ChatSignaling {
     this.socket.on('presence', (p: { userId: UserId; online: boolean }) => handlers.onPresence(p.userId, p.online));
     this.socket.on('group:join-request', (req: JoinRequest) => handlers.onJoinRequest(req));
     this.socket.on('invite:result', (r: InviteResult) => handlers.onInviteResult(r));
+    this.socket.on('connection:update', (p: ConnectionView & { peerId: UserId }) => {
+      const { peerId, ...view } = p;
+      handlers.onConnection(peerId, view);
+    });
   }
 
   get online() {
@@ -142,13 +157,13 @@ export class ChatSignaling {
         publicKey: this.identity.publicJwk,
       });
       const signature = await sign(this.identity, `urfree-chat-auth:${nonce}`);
-      const res = await this.request<{ ice: IceConfig; account: AccountInfo | null; accounts: boolean }>('auth:prove', {
+      const res = await this.request<{ ice: IceConfig; account: AccountInfo | null; accounts: boolean; links?: AccountLinks }>('auth:prove', {
         signature,
         ...this.authInfo(),
       });
       this.ice = res.ice;
       this.authed = true;
-      this.handlers.onAuthed(res.account ?? null, !!res.accounts);
+      this.handlers.onAuthed(res.account ?? null, !!res.accounts, res.links ?? null);
       this.handlers.onStatus('online');
       // Restore subscriptions after every (re)connect.
       if (this.watched.size) void this.flushWatch([...this.watched]);
@@ -160,6 +175,12 @@ export class ChatSignaling {
         this.socket.io.opts.reconnection = false;
         this.socket.disconnect();
         this.handlers.onStatus('missing');
+        return;
+      }
+      if (code === 'DEVICE_REPLACED') {
+        this.socket.io.opts.reconnection = false;
+        this.socket.disconnect();
+        this.handlers.onStatus('device-replaced');
         return;
       }
       if (code === 'BANNED' || code === 'SIGNUPS_CLOSED') {
@@ -255,6 +276,26 @@ export class ChatSignaling {
 
   joinHandled(groupId: string, requestId: string, accepted: boolean, reason?: string) {
     return this.request('group:join-handled', { groupId, requestId, accepted, reason }).catch(() => {});
+  }
+
+  /** Saves the chat list (contact and group IDs, no messages) for this account's next device. */
+  async pushLinks(links: AccountLinks): Promise<boolean> {
+    if (!this.authed) return false;
+    try {
+      await this.request('account:links', links);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  connectionGet(peer: UserId) {
+    return this.request<ConnectionView & Record<string, unknown>>('connection:get', { peer });
+  }
+
+  /** Recent text messages of a direct chat for the server to analyse (Connection). */
+  connectionAnalyze(peer: UserId, messages: { from: UserId; text: string; ts: number }[]) {
+    return this.request<{ skipped?: string; retryIn?: number }>('connection:analyze', { peer, messages });
   }
 
   close() {

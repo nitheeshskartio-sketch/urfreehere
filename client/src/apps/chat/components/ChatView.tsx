@@ -26,6 +26,7 @@ import { ImageViewer } from './ImageViewer';
 import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
 import { deleteChatPrompt } from './deleteChat';
+import { ConnectionBadge } from './Connection';
 
 export function ChatView({
   conv,
@@ -113,7 +114,9 @@ export function ChatView({
     const route = e.routeOf(conv.peerId);
     subtitle = (
       <span className="inline-flex items-center gap-1.5">
-        {st === 'connected' ? 'online' : st === 'connecting' ? 'connecting…' : st === 'online' ? 'online' : 'offline'}
+        {st === 'connected' ? 'online' : st === 'connecting' ? 'connecting…' : st === 'online' ? 'online' : st === 'unreachable' ? (
+          <span title="They're online, but a connection couldn't be made. Usually one of the networks blocks direct connections.">online · can't connect</span>
+        ) : 'offline'}
         {st === 'connected' && route === 'relay' && (
           <span className="inline-flex items-center gap-1 text-muted" title="A direct connection wasn't possible, so encrypted data is forwarded by a relay server that can't read it.">
             · <Server className="size-3" /> via relay
@@ -155,14 +158,16 @@ export function ChatView({
           </button>
         )}
         <button type="button" onClick={onInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-left hover:bg-surface">
-          <Avatar
-            avatar={e.convImage(conv)}
-            name={title}
-            seed={conv.peerId ?? conv.groupId}
-            size={40}
-            group={isGroup}
-            online={!isGroup && !self && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
-          />
+          <ConnectionBadge peer={!isGroup && !self && contact?.state === 'contact' ? conv.peerId : undefined}>
+            <Avatar
+              avatar={e.convImage(conv)}
+              name={title}
+              seed={conv.peerId ?? conv.groupId}
+              size={40}
+              group={isGroup}
+              online={!isGroup && !self && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
+            />
+          </ConnectionBadge>
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold">{title}</span>
             <span className="block truncate text-[12.5px] text-muted">{subtitle}</span>
@@ -270,6 +275,17 @@ export function ChatView({
         >
           <ArrowDown className="size-5" />
         </button>
+      )}
+
+      {!isGroup && !self && conv.peerId && e.peerStatus(conv.peerId) === 'unreachable' && (
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-line bg-warning-soft px-4 py-1.5 text-center text-[12px] text-ink-soft">
+          <span>
+            Can't connect to {title} right now. Their network or yours may be blocking direct connections. {waiting ? 'Waiting messages are sent as soon as it works.' : ''}
+          </span>
+          <button type="button" onClick={() => e.retryPeer(conv.peerId!)} className="font-semibold text-accent hover:underline">
+            Try again
+          </button>
+        </div>
       )}
 
       {waiting && e.peerStatus(conv.peerId!) === 'offline' && (

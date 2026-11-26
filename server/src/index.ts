@@ -10,7 +10,7 @@ import { attachGif } from './gif.js';
 import { attachAdmin } from './admin.js';
 import { settings } from './settings.js';
 import { config } from './config.js';
-import { buildIceConfig } from './ice.js';
+import { buildIceConfig, startIce } from './ice.js';
 import { TokenBucket, WindowLimiter } from './rateLimit.js';
 import { RoomRegistry, type Role, type Room } from './rooms.js';
 import { isToken, normalizeCode, parseSignal } from './validate.js';
@@ -115,6 +115,9 @@ function leaveCurrentRoom(socket: Socket) {
   rooms.leave(ref.room, ref.role);
 }
 
+// --- STUN/TURN: fetch managed TURN credentials when configured ------------
+startIce();
+
 // --- UR Chat (namespace /chat + /api/chat) -------------------------------
 const accountStore = config.chat.mongoUri
   ? AccountStore.connect(config.chat.mongoUri, config.chat.mongoDb, config.chat.inactiveDays)
@@ -124,6 +127,8 @@ const chat = attachChat(io, app, {
   dataFile: config.chat.dataFile,
   production: config.isProduction,
   accounts: accountStore,
+  anthropicApiKey: config.anthropicApiKey,
+  connectionHourlyLimit: config.connectionHourlyLimit,
 });
 
 // --- GIPHY proxy for UR Chat (key stays on the server) --------------------

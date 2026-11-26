@@ -27,6 +27,8 @@ interface ChatAdmin {
   onlineGroups(): number;
   inviteCount(): number;
   kick(userId: string, reason: 'deleted' | 'banned'): boolean;
+  forgetConnections(userId: string): Promise<void>;
+  connectionStats(): { configured: boolean; enabled: boolean; usedLastHour: number; limit: number };
 }
 
 interface MicAdmin {
@@ -171,6 +173,7 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
       mic: { rooms: micRooms.length, people: micRooms.reduce((n, r) => n + r.participantCount, 0) },
       postman: opts.postman.stats(),
       gif: gifStats(),
+      connection: opts.chat.connectionStats(),
       settings,
     });
   });
@@ -242,6 +245,7 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
     const doc = await a.get(id).catch(() => null);
     const removed = await a.remove(id).catch(() => false);
     if (!removed) return res.status(404).json({ error: 'NOT_FOUND' });
+    void opts.chat.forgetConnections(id);
     if (req.query.ban === '1') await ban(req, id, String(req.query.reason ?? '').slice(0, 200), doc?.name ?? null);
     else opts.chat.kick(id, 'deleted');
     audit(req, `Deleted profile ${doc?.name ?? ''} (${id})`);
@@ -303,7 +307,7 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
     const b = (req.body ?? {}) as Partial<SiteSettings>;
     if (b.announcement && typeof b.announcement === 'object') b.announcement = { ...b.announcement, updatedAt: Date.now() };
     applySettings(b);
-    const names = { signupsOpen: 'new accounts', gifsEnabled: 'GIFs', micCreateEnabled: 'new Mic rooms', postmanEnabled: 'Postman transfers' } as const;
+    const names = { signupsOpen: 'new accounts', gifsEnabled: 'GIFs', micCreateEnabled: 'new Mic rooms', postmanEnabled: 'Postman transfers', connectionAiEnabled: 'Connection (AI)' } as const;
     let changed = false;
     for (const k of Object.keys(names) as (keyof typeof names)[]) {
       if (settings[k] !== before[k]) {

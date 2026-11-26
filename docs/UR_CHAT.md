@@ -156,6 +156,26 @@ The smiley button in the compose box opens a Teams-style picker with **Emoji**, 
 
 Location uses only the browser's Geolocation API, and only after the user presses **Use my current location**. It can also take coordinates or a link pasted from any maps app. Messages show the coordinates and accuracy, with **Open in Maps**, which opens Apple Maps on iOS or Google Maps elsewhere via a normal link. No map tiles, API keys or third-party requests are involved.
 
+## Connection (AI emotional connection)
+
+Direct chats with accepted contacts show **Connection**: an emoji on the person's profile picture (chat header and chat list) for the emotional tone of the conversation, read by an AI model from the words and emoji the two people use. Behind it is one shared score from 0 to 100 with a status, shown in the contact info. Both people see the same result, and it updates as they chat. There is no switch or invite: it is automatic, and the site admin can turn it off for everyone. Code: [server/src/chat/connection.ts](../server/src/chat/connection.ts), [lib/connection.ts](../client/src/apps/chat/lib/connection.ts), [components/Connection.tsx](../client/src/apps/chat/components/Connection.tsx).
+
+| Score | Emoji | Status |
+| --- | --- | --- |
+| 0–20 | 🥶 | Cold |
+| 21–40 | 😐 | Distant |
+| 41–60 | 😊 | Friendly |
+| 61–80 | 🥰 | Close |
+| 81–100 | ❤️ | Deep Connection |
+
+The model also names the current tone (happiness 😍, affection ❤️, caring 🥰, friendship 😊, excitement 🤩, missing 🥺, trust 🤝, neutral 😐, sadness 😔, anger 😡, disconnection 💔). That emoji is the one on the profile picture; hovering it shows the score and status. The contact info explains what is sent.
+- **What is sent:** at analysis time, a device sends up to the last 40 text messages of the chat (600 characters each) over the signaling socket. The server labels the two people A and B (no names or chat IDs), sends the text to Claude (`claude-opus-5-5`, low effort, structured output), and drops it. Secret, view-once, deleted and locally cleared messages are never sent. Images, files, GIFs and locations are not sent.
+- **Not analysed:** message requests, blocked people, groups and your personal chat.
+- **What is kept:** one record per pair in MongoDB `chat_connections` (or in memory): the current score and tone, and when. There is no history, and abandoned pairs expire after 30 days. Deleting an account removes its records.
+- **When it runs:** 8 seconds after the conversation goes quiet, once there are at least 6 text messages from both people, then again after at least 3 new ones. Each pair is analysed at most once a minute, with one request in flight, so two devices never cause a double call. The current score is given to the model as the starting point, so it moves gradually. The number of messages doesn't raise the score by itself. With too little context the model says so, and the chat shows "Not enough to go on yet" instead of a score.
+- **Limits and switches:** `ANTHROPIC_API_KEY` must be set on the server; without it the feature is hidden. `CONNECTION_AI_HOURLY_LIMIT` (default 200) caps analyses across the server, and each user can trigger 40 per hour. The admin console's **Controls** page can switch it off for everyone and shows usage.
+- **Caveat:** the score is an AI estimate of tone, not a measure of anyone's feelings, and the UI says so. A modified client could send made-up text for its own chats. That would only change the score shown to that pair.
+
 ## Privacy and security summary
 
 | Topic | Behaviour |
@@ -163,7 +183,7 @@ Location uses only the browser's Geolocation API, and only after the user presse
 | Transport | WebRTC DTLS on every connection. TURN relays can't decrypt. |
 | Authentication | Server login by signature. Peers verify signed DTLS fingerprints against the user ID. |
 | Integrity | Every message and group op is signed by its author and checked on receipt and on catch-up. |
-| Server knowledge | Account profiles in MongoDB (deleted after 7 days inactive), online IDs, who signals whom, group IDs a client belongs to, invite metadata. No message content and no files. |
+| Server knowledge | Account profiles in MongoDB (deleted after 7 days inactive), online IDs, who signals whom, group IDs a client belongs to, invite metadata. No message content and no files, except recent text passed through (not stored) for **Connection** in direct chats where both people switched it on. |
 | Storage | Unencrypted IndexedDB on each participant's device. "Delete everything" in Settings wipes it. |
 | Unknown senders | Shown under **Message requests**: no read receipts, no auto-downloads, Accept or Block. Blocked IDs can't connect. |
 | Rate limits | Connections, invite lookups, joins and invite creation per IP or user; signals per socket. |
@@ -171,7 +191,16 @@ Location uses only the browser's Geolocation API, and only after the user presse
 
 **Not claimed:** UR Chat does not advertise end-to-end encryption. Content is encrypted in transit on every hop and authenticated per author, but it is stored unencrypted on participants' devices, and there are no safety-number verification screens or forward-secret message keys at the application layer. Those would be the next step before such a claim.
 
-**Known limits:** presence is visible to anyone who knows your ID. One active tab per identity (another tab can take over with "Use here"). History lives only on the device that created the identity, with no multi-device sync. Delivery needs both sides online at the same time.
+**Known limits:** presence is visible to anyone who knows your ID. One active tab per identity (another tab can take over with "Use here"). Delivery needs both sides online at the same time.
+
+## One device at a time
+
+An account is used on one device (browser profile) at a time. Each browser keeps a random device ID in IndexedDB (tabs share it) and sends it when it signs in.
+
+- **Signing in with the login code** on another device makes that device the account's only device (`deviceId` on the account in MongoDB). If the old device is online it gets `session:replaced` with reason `new-device`. If it was offline, its next sign-in is refused with `DEVICE_REPLACED`. Either way the old device erases its chats, files and identity and shows **Signed in on another device**.
+- **Another tab** of the same browser only takes over the connection, as before ("UR Chat is open in another tab", **Use here**).
+- **The new device starts fresh.** The server keeps each account's chat list: contact IDs (and who is blocked), and group IDs with their member IDs, sent by the device as `account:links` whenever it changes. It never holds messages. After a code sign-in the new device rebuilds the direct chats and fetches each group's signed member log from its members. Messages from before the sign-in stay hidden (`historyStart`), even though peers sync them for the gap-free sequence check, so the new device shows no old messages, unread counts or notifications.
+- Accounts created before device tracking adopt the first device that resumes.
 
 ## Testing
 

@@ -44,6 +44,7 @@ interface Settings {
   gifsEnabled: boolean;
   micCreateEnabled: boolean;
   postmanEnabled: boolean;
+  connectionAiEnabled: boolean;
   announcement: { text: string; tone: 'info' | 'warning' | 'success'; updatedAt: number } | null;
 }
 
@@ -54,6 +55,7 @@ interface Overview {
   mic: { rooms: number; people: number };
   postman: { total: number; waiting: number; paired: number };
   gif: { configured: boolean; used: number; limit: number; cached: number; unauthorized: boolean; upstreamLimited: boolean };
+  connection?: { configured: boolean; enabled: boolean; usedLastHour: number; limit: number };
   settings: Settings;
 }
 
@@ -845,6 +847,16 @@ function ControlsSection({ notify }: { notify: Notify }) {
           <Switch checked={s.gifsEnabled} onChange={toggle('gifsEnabled', 'GIFs')} label="GIFs and stickers" description="When off, the GIF and sticker tabs say they're switched off. GIFs already sent still show." />
           <Switch checked={s.micCreateEnabled} onChange={toggle('micCreateEnabled', 'New Mic rooms')} label="Creating Mic rooms" description="When off, no new voice rooms can be created. Rooms already open keep working." />
           <Switch checked={s.postmanEnabled} onChange={toggle('postmanEnabled', 'Postman')} label="UR Postman transfers" description="When off, nobody can start a new file transfer. Transfers in progress finish." />
+          <Switch
+            checked={s.connectionAiEnabled}
+            onChange={toggle('connectionAiEnabled', 'Connection (AI)')}
+            label="Connection (AI score in chats)"
+            description={
+              !data.connection?.configured
+                ? 'No ANTHROPIC_API_KEY on the server, so the feature is hidden either way.'
+                : `When off, the Connection score and switch disappear from chats. ${data.connection.usedLastHour} of ${data.connection.limit} analyses used in the last hour.`
+            }
+          />
         </div>
       </Card>
       <Card className="mt-4">

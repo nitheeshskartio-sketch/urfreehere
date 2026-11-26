@@ -157,4 +157,5 @@ export type FileTransferState =
   | { status: 'failed'; reason: string }
   | { status: 'cancelled' };
 
-export type PeerStatus = 'offline' | 'online' | 'connecting' | 'connected';
+/** "unreachable": online, but repeated attempts to connect failed (usually a strict network with no TURN relay). */
+export type PeerStatus = 'offline' | 'online' | 'connecting' | 'connected' | 'unreachable';

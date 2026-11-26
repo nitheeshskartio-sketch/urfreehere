@@ -122,7 +122,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
           <form onSubmit={login} className="w-full max-w-[460px] rounded-xl border border-line bg-panel shadow-card" noValidate>
             <div className="border-b border-line px-6 py-5">
               <h1 className="text-xl font-semibold tracking-tight">Sign in to UR Chat</h1>
-              <p className="mt-1 text-sm text-muted">Enter your login code to get your account and profile on this device. Chats aren't transferred: they stay on the device where they happened.</p>
+              <p className="mt-1 text-sm text-muted">Enter your login code to use your account on this device. Your profile, contacts and groups come back; earlier messages don't. UR Chat works on one device at a time, so your other device is signed out and its chats are removed.</p>
             </div>
             <div className="space-y-3 px-6 py-5">
               <Field label="Login code">

@@ -42,6 +42,20 @@ Mitigations:
 - Set coturn quotas (`user-quota`, `total-quota`, `max-bps`) and monitor bandwidth.
 - Put TURN on a host with generous or unmetered egress.
 
+### Easiest: Cloudflare Realtime TURN (managed)
+
+Without TURN, two people on strict networks (mobile data, some office or college Wi-Fi) can't connect at all. UR Chat then shows "online · can't connect" with **Try again** instead of an endless "connecting…". Cloudflare runs a managed TURN service with a free tier:
+
+1. In the Cloudflare dashboard go to **Realtime → TURN Server → Create**.
+2. Copy the **Turn Token ID** and the **API Token** into the server environment:
+   ```
+   CLOUDFLARE_TURN_KEY_ID=...
+   CLOUDFLARE_TURN_API_TOKEN=...
+   ```
+3. Restart. The log shows `[ice] Cloudflare TURN enabled`.
+
+The server asks Cloudflare for 24-hour credentials (`POST https://rtc.live.cloudflare.com/v1/turn/keys/<id>/credentials/generate-ice-servers`) and refreshes them every 12 hours. The API token never reaches browsers. If a refresh fails, the server keeps using credentials that are still valid and otherwise falls back to the `TURN_*` settings below. When set, it takes priority over them.
+
 ### Running coturn
 
 Install (`apt install coturn`, or the `coturn/coturn` Docker image) and use a config like this:

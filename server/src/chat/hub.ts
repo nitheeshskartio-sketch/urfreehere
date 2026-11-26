@@ -13,9 +13,10 @@ import {
   verifySignature,
   type PublicJwk,
 } from './identity.js';
-import { AccountStore, parseProfile, toPublic } from './accounts.js';
+import { AccountStore, parseProfile, toPublic, type AccountLinks } from './accounts.js';
 import { InviteStore, type InvitePreview, type JoinRequest } from './invites.js';
 import { bannedIds, settings } from '../settings.js';
+import { ConnectionService } from './connection.js';
 
 /**
  * UR Chat signaling hub (Socket.IO namespace "/chat").
@@ -26,7 +27,9 @@ import { bannedIds, settings } from '../settings.js';
  *  - relay WebRTC offers/answers/ICE between authenticated users
  *  - group invitations: metadata, preview, join requests routed to online members
  *
- * Chat messages and files never pass through this server.
+ * Chat messages and files never pass through this server. The one exception
+ * is Connection (see connection.ts): devices send recent direct-chat text for
+ * analysis, which is passed to the AI model and not stored.
  */
 
 export interface ChatHubOptions {
@@ -35,10 +38,15 @@ export interface ChatHubOptions {
   production: boolean;
   /** MongoDB accounts; null when MONGODB_URI isn't configured. */
   accounts: Promise<AccountStore> | null;
+  /** Claude API key for Connection; empty switches the feature off. */
+  anthropicApiKey: string;
+  connectionHourlyLimit: number;
 }
 
 interface Session {
   userId: string;
+  /** Random ID of the browser profile; tabs of one browser share it. */
+  deviceId: string;
   publicKey: PublicJwk;
   socket: Socket;
   watching: Set<string>;
@@ -51,6 +59,7 @@ const MAX_SIGNAL_BYTES = 40 * 1024;
 const SIGNAL_KINDS = new Set(['offer', 'answer', 'ice', 'connect', 'bye']);
 const GROUP_ID_RE = /^[A-Za-z0-9_-]{16,40}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{22,64}$/;
+const DEVICE_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
 type Ack = (response: Record<string, unknown>) => void;
 const ackOf = (fn: unknown): Ack => (typeof fn === 'function' ? (fn as Ack) : () => {});
@@ -65,6 +74,25 @@ function jsonSize(v: unknown): number {
 
 function str(v: unknown, max: number): string | null {
   return typeof v === 'string' && v.length <= max ? v : null;
+}
+
+const GROUP_ID = /^[A-Za-z0-9_-]{16,40}$/;
+
+/** Contact and group IDs a client asks the server to keep for its next device. */
+function parseLinks(v: unknown): AccountLinks | null {
+  const p = v as { contacts?: unknown; groups?: unknown } | null;
+  if (!p || !Array.isArray(p.contacts) || !Array.isArray(p.groups) || p.contacts.length > 1000 || p.groups.length > 300) return null;
+  const contacts: AccountLinks['contacts'] = [];
+  for (const c of p.contacts as { id?: unknown; blocked?: unknown }[]) {
+    if (!c || !isUserId(c.id)) return null;
+    contacts.push({ id: c.id, blocked: c.blocked === true });
+  }
+  const groups: AccountLinks['groups'] = [];
+  for (const g of p.groups as { id?: unknown; members?: unknown }[]) {
+    if (!g || typeof g.id !== 'string' || !GROUP_ID.test(g.id) || !Array.isArray(g.members) || g.members.length > 64) return null;
+    groups.push({ id: g.id, members: g.members.filter(isUserId) });
+  }
+  return { contacts, groups };
 }
 
 function parsePreview(v: unknown): InvitePreview | null {
@@ -132,6 +160,14 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     for (const w of watchers.get(userId) ?? []) emitTo(w, 'presence', { userId, online });
   };
 
+  const connection = new ConnectionService({
+    accounts: opts.accounts,
+    production: opts.production,
+    apiKey: opts.anthropicApiKey,
+    hourlyLimit: opts.connectionHourlyLimit,
+    emitTo,
+  });
+
   const deliverPending = (groupId: string, toUserId?: string) => {
     for (const req of invites.pendingFor(groupId)) {
       if (toUserId) emitTo(toUserId, 'group:join-request', req);
@@ -170,7 +206,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     socket.on('auth:prove', async (payload: unknown, ackFn: unknown) => {
       const ack = ackOf(ackFn);
       if (!pendingAuth) return ack({ ok: false, error: 'NO_CHALLENGE' });
-      const p = (payload ?? {}) as { signature?: unknown; mode?: unknown; profile?: unknown };
+      const p = (payload ?? {}) as { signature?: unknown; mode?: unknown; profile?: unknown; deviceId?: unknown };
       const key = keyFromJwk(pendingAuth.jwk);
       const sig = str(p.signature, 200);
       if (!key || !sig || !verifySignature(key, AUTH_PREFIX + pendingAuth.nonce, sig)) {
@@ -181,8 +217,11 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       pendingAuth = null;
       const mode = p.mode === 'create' || p.mode === 'login' ? p.mode : 'resume';
       if (bannedIds.has(userId)) return ack({ ok: false, error: 'BANNED' });
+      // Older clients send no device ID: treat each of their sockets as its own device-less session.
+      const deviceId = typeof p.deviceId === 'string' && DEVICE_RE.test(p.deviceId) ? p.deviceId : '';
 
       let account = null;
+      let links: AccountLinks | null = null;
       if (accountsConfigured()) {
         if (!accounts) return ack({ ok: false, error: 'ACCOUNTS_STARTING' });
         try {
@@ -191,9 +230,20 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
             if (!profile) return ack({ ok: false, error: 'INVALID_PROFILE' });
             if (!settings.signupsOpen && !(await accounts.get(userId))) return ack({ ok: false, error: 'SIGNUPS_CLOSED' });
             account = toPublic(await accounts.upsert(userId, jwk, profile));
+            if (deviceId) await accounts.setDevice(userId, deviceId);
           } else {
             const doc = await accounts.get(userId);
             if (!doc) return ack({ ok: false, error: 'ACCOUNT_NOT_FOUND' });
+            if (mode === 'login') {
+              // Signing in with the login code makes this the account's only device.
+              if (deviceId) await accounts.setDevice(userId, deviceId);
+              links = doc.links ?? null;
+            } else if (deviceId && doc.deviceId && doc.deviceId !== deviceId) {
+              // Someone signed in with the login code on another device since: this one lost access.
+              return ack({ ok: false, error: 'DEVICE_REPLACED' });
+            } else if (deviceId && !doc.deviceId) {
+              await accounts.setDevice(userId, deviceId); // accounts from before device tracking
+            }
             await accounts.touch([userId]);
             account = toPublic(doc);
           }
@@ -207,13 +257,15 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       // One live session per identity: a newer tab or device takes over.
       const previous = sessions.get(userId);
       if (previous && previous.socket.id !== socket.id) {
-        previous.socket.emit('session:replaced');
+        // Another tab of the same browser just takes over; a login-code sign-in on another device signs this one out.
+        const otherDevice = mode === 'login' && (!deviceId || previous.deviceId !== deviceId);
+        previous.socket.emit('session:replaced', { reason: otherDevice ? 'new-device' : 'tab' });
         previous.socket.disconnect(true);
       }
-      session = { userId, publicKey: jwk, socket, watching: new Set(), groups: new Set() };
+      session = { userId, deviceId, publicKey: jwk, socket, watching: new Set(), groups: new Set() };
       sessions.set(userId, session);
       notifyPresence(userId, true);
-      ack({ ok: true, ice: buildIceConfig(), account, accounts: accountsConfigured() });
+      ack({ ok: true, ice: buildIceConfig(), account, accounts: accountsConfigured(), ...(links ? { links } : {}) });
     });
 
     socket.on('profile:update', async (payload: unknown, ackFn: unknown) => {
@@ -225,6 +277,23 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       if (!accounts) return ack({ ok: true, stored: false });
       try {
         await accounts.updateProfile(s.userId, profile);
+        ack({ ok: true, stored: true });
+      } catch {
+        ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+      }
+    });
+
+    /** The chat list (contact and group IDs, no messages) kept for this account's next device. */
+    socket.on('account:links', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s || !bucket.take()) return;
+      if (jsonSize(payload) > 256 * 1024) return ack({ ok: false, error: 'TOO_LARGE' });
+      const links = parseLinks(payload);
+      if (!links) return ack({ ok: false, error: 'INVALID' });
+      if (!accounts) return ack({ ok: true, stored: false });
+      try {
+        await accounts.setLinks(s.userId, links);
         ack({ ok: true, stored: true });
       } catch {
         ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
@@ -424,6 +493,31 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       ack({ ok: true });
     });
 
+    // --- Connection (AI emotional connection score), direct chats only.
+    const connectionPeer = (payload: unknown, s: Session): string | null => {
+      const peer = (payload as { peer?: unknown } | null)?.peer;
+      return isUserId(peer) && peer !== s.userId ? peer : null;
+    };
+
+    socket.on('connection:get', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s || !bucket.take()) return;
+      const peer = connectionPeer(payload, s);
+      if (!peer) return ack({ ok: false, error: 'INVALID' });
+      ack({ ok: true, ...(await connection.get(s.userId, peer)) });
+    });
+
+    socket.on('connection:analyze', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s || !bucket.take()) return;
+      const peer = connectionPeer(payload, s);
+      if (!peer) return ack({ ok: false, error: 'INVALID' });
+      if (jsonSize(payload) > 64 * 1024) return ack({ ok: false, error: 'TOO_LARGE' });
+      ack(await connection.analyze(s.userId, peer, (payload as { messages?: unknown }).messages));
+    });
+
     socket.on('disconnect', () => {
       if (!session || sessions.get(session.userId)?.socket.id !== socket.id) return;
       // Leaving counts as activity: the 7-day countdown starts from now.
@@ -455,6 +549,8 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     isOnline: (userId: string) => sessions.has(userId),
     onlineGroups: () => groupMembers.size,
     inviteCount: () => invites.count(),
+    forgetConnections: (userId: string) => connection.forgetUser(userId),
+    connectionStats: () => connection.stats(),
     /** Admin: tells the device its account was deleted or suspended, then disconnects it. */
     kick(userId: string, reason: 'deleted' | 'banned') {
       const s = sessions.get(userId);
