@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { CopyButton } from '../../../ui/CopyButton';
 import { useEngine } from '../hooks';
+import { setThemePreference, themePreference, useTheme } from '../../../lib/theme';
 import { enableDesktopNotifications, notificationPermission } from '../lib/notify';
 import { formatUserId } from '../lib/encoding';
 import type { AvatarRef } from '../lib/types';
@@ -23,6 +24,95 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
       <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-line-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-panel after:shadow after:transition-transform peer-checked:bg-accent peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40" />
     </label>
+  );
+}
+
+/** Segmented choice, Teams-style. */
+function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div>
+      <p className="text-sm font-medium">{label}</p>
+      <div className="mt-2 inline-flex flex-wrap rounded-md border border-line bg-surface p-0.5" role="radiogroup" aria-label={label}>
+        {options.map(([v, l]) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={value === v}
+            onClick={() => onChange(v)}
+            className={`rounded px-3 py-1.5 text-[13px] font-medium transition-colors ${value === v ? 'bg-accent text-white shadow-card' : 'text-ink-soft hover:bg-subtle'}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AppearanceSettings() {
+  const e = useEngine();
+  useTheme(); // re-render when the theme changes elsewhere
+  const pref = themePreference();
+  const s = e.settings;
+  return (
+    <div className="space-y-6 p-4 sm:p-5">
+      <Choice
+        label="Theme"
+        value={pref}
+        options={[
+          ['light', 'Light'],
+          ['dark', 'Dark'],
+          ['system', 'Same as device'],
+        ]}
+        onChange={(v) => setThemePreference(v)}
+      />
+      <div>
+        <Choice
+          label="Text size"
+          value={s.textSize}
+          options={[
+            ['sm', 'Small'],
+            ['md', 'Medium'],
+            ['lg', 'Large'],
+            ['xl', 'Extra large'],
+          ]}
+          onChange={(v) => void e.updateSettings({ textSize: v })}
+        />
+        {/* Live preview */}
+        <div className="mt-3 space-y-1.5 rounded-lg bg-canvas p-3">
+          <p className="chat-meta text-muted">
+            <span className="font-semibold text-ink-soft">Priya</span> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: s.clock === 'auto' ? undefined : s.clock === '12h' })}
+          </p>
+          <div className="chat-bubble chat-text inline-block rounded-md bg-panel px-3 py-2 shadow-card">This is how your messages will look.</div>
+          <div className="flex justify-end">
+            <div className="chat-bubble chat-text inline-block rounded-md bg-bubble-own px-3 py-2">Looks good 👍</div>
+          </div>
+        </div>
+      </div>
+      <Choice
+        label="Message spacing"
+        value={s.density}
+        options={[
+          ['comfortable', 'Comfortable'],
+          ['compact', 'Compact'],
+        ]}
+        onChange={(v) => void e.updateSettings({ density: v })}
+      />
+      <Choice
+        label="Time format"
+        value={s.clock}
+        options={[
+          ['auto', 'Automatic'],
+          ['12h', '12-hour'],
+          ['24h', '24-hour'],
+        ]}
+        onChange={(v) => void e.updateSettings({ clock: v })}
+      />
+      <div className="border-t border-line pt-3">
+        <Toggle checked={s.enterToSend} onChange={(v) => void e.updateSettings({ enterToSend: v })} label="Press Enter to send" hint="Use Shift + Enter for a new line." />
+      </div>
+    </div>
   );
 }
 
@@ -74,7 +164,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
   const [name, setName] = useState(p.name);
   const [status, setStatus] = useState(p.status);
   const [avatar, setAvatar] = useState<AvatarRef>(p.avatar);
-  const [tab, setTab] = useState<'profile' | 'id' | 'login' | 'privacy'>('profile');
+  const [tab, setTab] = useState<'profile' | 'appearance' | 'notifications' | 'id' | 'login' | 'privacy'>('profile');
   const dirty = name !== p.name || status !== p.status || avatar !== p.avatar;
   const blocked = [...e.contacts.values()].filter((c) => c.state === 'blocked');
 
@@ -91,10 +181,12 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
 
   return (
     <Modal title="Settings" onClose={onClose} wide>
-      <div className="flex gap-1 border-b border-line px-3 pt-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-line px-3 pt-2">
         {(
           [
             ['profile', 'Profile'],
+            ['appearance', 'Appearance'],
+            ['notifications', 'Notifications'],
             ['id', 'Your chat ID'],
             ['login', 'Login code'],
             ['privacy', 'Privacy & data'],
@@ -104,7 +196,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}
           >
             {l}
           </button>
@@ -125,17 +217,14 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
               Save profile
             </Button>
           </div>
-          <div className="border-t border-line pt-4">
-            <p className="text-[13px] font-medium text-ink-soft">Preferences</p>
-            <Toggle
-              checked={e.settings.enterToSend}
-              onChange={(v) => void e.updateSettings({ enterToSend: v })}
-              label="Press Enter to send"
-              hint="Use Shift + Enter for a new line."
-            />
-            <NotificationToggles />
+        </div>
+      )}
 
-          </div>
+      {tab === 'appearance' && <AppearanceSettings />}
+
+      {tab === 'notifications' && (
+        <div className="p-4 sm:p-5">
+          <NotificationToggles />
         </div>
       )}
 

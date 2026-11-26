@@ -29,6 +29,22 @@ media?.addEventListener('change', (e) => {
   for (const l of listeners) l(t);
 });
 
+export type ThemePreference = Theme | 'system';
+
+export function themePreference(): ThemePreference {
+  const saved = localStorage.getItem(KEY);
+  return saved === 'light' || saved === 'dark' ? saved : 'system';
+}
+
+/** Light, dark, or follow the device ("system"). */
+export function setThemePreference(pref: ThemePreference) {
+  if (pref !== 'system') return setTheme(pref);
+  localStorage.removeItem(KEY);
+  const t: Theme = media?.matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+  for (const l of listeners) l(t);
+}
+
 export function useTheme(): [Theme, (t: Theme) => void] {
   const [theme, set] = useState<Theme>(currentTheme);
   useEffect(() => {

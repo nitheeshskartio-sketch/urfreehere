@@ -82,7 +82,7 @@ export function ChatView({
     setShowJump(!near);
   };
 
-  const images = useMemo(() => events.filter((x) => x.kind === 'image' && e.hasFile(String(x.body.fileId))).map((x) => String(x.body.fileId)), [events, e]);
+  const images = useMemo(() => events.filter((x) => x.kind === 'image' && !x.body.viewOnce && !x.body.secret && e.hasFile(String(x.body.fileId))).map((x) => String(x.body.fileId)), [events, e]);
 
   const jumpTo = (id: string) => {
     const el = document.getElementById(`m-${id}`);

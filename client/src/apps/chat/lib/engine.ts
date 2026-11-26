@@ -1,4 +1,5 @@
 import { db } from './db';
+import { setClockFormat } from './time';
 import { canonical, randomId, sha256Hex } from './encoding';
 import { TransferCancelled, receiveFile, sendFile } from './files';
 import {
@@ -27,6 +28,7 @@ import type {
   Profile,
   PublicJwk,
   ReceiptStatus,
+  SendMode,
   Settings,
   StoredEvent,
   UserId,
@@ -56,6 +58,15 @@ export interface Toast {
   tone: 'info' | 'error' | 'success';
 }
 
+export interface ViewOnceSnapshot {
+  kind: EventKind;
+  author: UserId;
+  ts: number;
+  body: Record<string, unknown>;
+  /** Object URL for an image or file (revoke when the viewer closes). */
+  url?: string;
+}
+
 export type EngineStatus = 'loading' | 'onboarding' | 'ready' | 'expired' | 'unsupported' | 'error';
 
 export function dmId(a: UserId, b: UserId): ConvId {
@@ -67,6 +78,21 @@ function eventSignable(e: Omit<ChatEvent, 'sig'>): string {
 }
 
 const rank: Record<ReceiptStatus, number> = { delivered: 1, read: 2 };
+
+/** Applies text size, spacing and clock settings to the page. */
+function applyAppearance(s: Settings) {
+  const root = document.documentElement;
+  root.dataset.chatText = s.textSize;
+  root.dataset.chatDensity = s.density;
+  setClockFormat(s.clock);
+}
+
+/** Marks a message body as secret or view-once. */
+function withMode<T extends Record<string, unknown>>(body: T, mode: SendMode): T {
+  if (mode === 'secret') (body as Record<string, unknown>).secret = true;
+  if (mode === 'once') (body as Record<string, unknown>).viewOnce = true;
+  return body;
+}
 
 function sanitizeProfile(p: unknown): Profile | null {
   const o = p as Record<string, unknown> | null;
@@ -97,6 +123,10 @@ function validEvent(e: unknown): e is ChatEvent {
   if (x.replyTo !== null && (typeof x.replyTo !== 'string' || x.replyTo.length > 64)) return false;
   if (!x.body || typeof x.body !== 'object' || Array.isArray(x.body)) return false;
   if (canonical(x.body).length > 64 * 1024) return false;
+  // Secret (spoiler) and view-once messages: the only allowed value is true.
+  const flags = x.body as Record<string, unknown>;
+  if (flags.secret !== undefined && flags.secret !== true) return false;
+  if (flags.viewOnce !== undefined && flags.viewOnce !== true) return false;
   const b = x.body as Record<string, unknown>;
   switch (x.kind) {
     case 'text':
@@ -181,7 +211,15 @@ export class ChatEngine {
   net: SignalingStatus = 'connecting';
   identity: Identity | null = null;
   profile: Profile | null = null;
-  settings: Settings = { enterToSend: true, desktopNotifications: false, notificationPreview: true, notificationSound: true };
+  settings: Settings = {
+    enterToSend: true,
+    desktopNotifications: false,
+    notificationPreview: true,
+    notificationSound: true,
+    textSize: 'md',
+    density: 'comfortable',
+    clock: 'auto',
+  };
 
   contacts = new Map<UserId, Contact>();
   profiles = new Map<UserId, Profile>();
@@ -292,6 +330,7 @@ export class ChatEngine {
       this.identity = (await db.get<Identity>('kv', 'identity')) ?? null;
       this.profile = (await db.get<Profile>('kv', 'profile')) ?? null;
       this.settings = { ...this.settings, ...((await db.get<Settings>('kv', 'settings')) ?? {}) };
+      applyAppearance(this.settings);
       // Only an account the server confirmed it stored counts. (An older "registered" flag could be
       // set while the server ran without MongoDB; such devices simply register again.)
       this.registered = (await db.get<boolean>('kv', 'accountConfirmed')) ?? false;
@@ -642,6 +681,13 @@ export class ChatEngine {
   }
 
   describe(e: StoredEvent): string {
+    // Never reveal a secret or view-once message in previews, replies, search or notifications.
+    const fl = e.body as Record<string, unknown>;
+    if (fl.viewOnce === true && e.kind !== 'op') {
+      const what = e.kind === 'image' ? 'photo' : e.kind === 'gif' ? (fl.sticker ? 'sticker' : 'GIF') : e.kind === 'file' ? 'file' : e.kind === 'location' ? 'location' : 'message';
+      return `View once ${what}`;
+    }
+    if (fl.secret === true && e.kind !== 'op') return 'Secret message';
     const b = e.body as Record<string, unknown>;
     switch (e.kind) {
       case 'text':
@@ -998,7 +1044,7 @@ export class ChatEngine {
       this.sendTo(peer, { t: 'events', conv, events: [], done: true });
       return;
     }
-    const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.seq > (Number(vector?.[e.author]) || 0));
+    const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.opened && e.seq > (Number(vector?.[e.author]) || 0));
     // Group operations first so the receiver can verify the messages that follow.
     want.sort((a, b) => (a.kind === 'op' ? 0 : 1) - (b.kind === 'op' ? 0 : 1) || a.ts - b.ts);
     const strip = (e: StoredEvent): ChatEvent => ({
@@ -1170,7 +1216,8 @@ export class ChatEngine {
     const conv = this.convs.get(e.conv);
     const accepted = e.conv.startsWith('g:') || this.contacts.get(e.author)?.state === 'contact';
     const viewing = this.activeConv === e.conv && document.visibilityState === 'visible';
-    this.queueReceipt(e, viewing && accepted ? 'read' : 'delivered');
+    const once = (e.body as Record<string, unknown>).viewOnce === true;
+    this.queueReceipt(e, viewing && accepted && !once ? 'read' : 'delivered');
     this.typing.get(e.conv)?.delete(e.author);
     if ((e.kind === 'image' || e.kind === 'file') && accepted && conv) {
       const b = e.body as unknown as FileBody;
@@ -1213,8 +1260,50 @@ export class ChatEngine {
       e.local.sent = true;
       this.queueWrite('events', e.id, e);
       changed = true;
+      // Everyone opened my view-once message: remove its content from my device too.
+      if ((e.body as Record<string, unknown>).viewOnce === true && !e.local.opened && this.deliveryOf(e) === 'read') void this.consumeViewOnce(e.id);
     }
     if (changed) this.notify();
+  }
+
+  /**
+   * Opens a view-once message: returns an in-memory copy for the viewer and
+   * immediately deletes the stored content, so it can't be opened again (not
+   * even after a reload while the viewer is open).
+   */
+  async takeViewOnce(id: string): Promise<ViewOnceSnapshot | null> {
+    const e = this.byId.get(id);
+    if (!e || e.author === this.me || (e.body as Record<string, unknown>).viewOnce !== true || e.local.opened) return null;
+    const b = e.body as Record<string, unknown>;
+    let url: string | undefined;
+    if (e.kind === 'image' || e.kind === 'file') {
+      const rec = await db.get<{ fileId: string; blob: Blob }>('files', String(b.fileId));
+      if (!rec) return null; // not downloaded yet
+      const type = e.kind === 'image' ? mimeFor(String(b.name)) : 'application/octet-stream';
+      url = URL.createObjectURL(rec.blob.slice(0, rec.blob.size, type));
+    }
+    const snapshot: ViewOnceSnapshot = { kind: e.kind, author: e.author, ts: e.ts, body: { ...b }, url };
+    await this.consumeViewOnce(id);
+    return snapshot;
+  }
+
+  /**
+   * Called when a view-once message is closed after viewing (and on the sender
+   * once everyone opened it): the content is deleted from this device and only
+   * an "Opened" placeholder remains. Its sequence number stays, so sync never
+   * brings it back.
+   */
+  async consumeViewOnce(id: string) {
+    const e = this.byId.get(id);
+    if (!e || (e.body as Record<string, unknown>).viewOnce !== true || e.local.opened) return;
+    if (e.author !== this.me) this.queueReceipt(e, 'read');
+    if (e.kind === 'image' || e.kind === 'file') await this.dropFile((e.body as unknown as FileBody).fileId);
+    const b = e.body as Record<string, unknown>;
+    e.body = { viewOnce: true, ...(b.sticker ? { sticker: true } : {}) };
+    e.local.opened = true;
+    this.queueWrite('events', e.id, e);
+    void this.flushWrites();
+    this.notify();
   }
 
   markRead(conv: ConvId) {
@@ -1226,7 +1315,8 @@ export class ChatEngine {
     const accepted = conv.startsWith('g:') || this.contacts.get(c.peerId!)?.state === 'contact';
     if (!accepted || document.visibilityState !== 'visible') return this.notify();
     for (const e of this.events.get(conv) ?? []) {
-      if (e.author !== this.me && e.kind !== 'op' && e.local.receipts[this.me] !== 'read') this.queueReceipt(e, 'read');
+      if (e.author !== this.me && e.kind !== 'op' && e.local.receipts[this.me] !== 'read' && (e.body as Record<string, unknown>).viewOnce !== true)
+        this.queueReceipt(e, 'read');
     }
     this.notify();
   }
@@ -1301,39 +1391,41 @@ export class ChatEngine {
     return null;
   }
 
-  async sendText(conv: ConvId, text: string, replyTo: string | null = null) {
+  async sendText(conv: ConvId, text: string, replyTo: string | null = null, mode: SendMode = 'normal') {
     const t = text.trim();
     if (!t) return;
     this.typingSent.delete(conv);
     const err = this.canPost(conv);
     if (err) return this.toast(err, 'error');
     for (let i = 0; i < t.length; i += MAX_TEXT) {
-      await this.publish(await this.makeEvent(conv, 'text', { text: t.slice(i, i + MAX_TEXT) }, i === 0 ? replyTo : null));
+      await this.publish(await this.makeEvent(conv, 'text', withMode({ text: t.slice(i, i + MAX_TEXT) }, mode), i === 0 ? replyTo : null));
     }
     this.acceptIfRequest(conv);
   }
 
-  async sendGif(conv: ConvId, gif: { id: string; url: string; width: number; height: number; title?: string }, sticker: boolean, replyTo: string | null = null) {
+  async sendGif(conv: ConvId, gif: { id: string; url: string; width: number; height: number; title?: string }, sticker: boolean, replyTo: string | null = null, mode: SendMode = 'normal') {
     const err = this.canPost(conv);
     if (err) return this.toast(err, 'error');
     const body: Record<string, unknown> = { id: gif.id, url: gif.url, width: Math.round(gif.width), height: Math.round(gif.height) };
     if (gif.title) body.title = gif.title.slice(0, 120);
     if (sticker) body.sticker = true;
+    withMode(body, mode);
     await this.publish(await this.makeEvent(conv, 'gif', body, replyTo));
     this.acceptIfRequest(conv);
   }
 
-  async sendLocation(conv: ConvId, loc: LocationBody, replyTo: string | null = null) {
+  async sendLocation(conv: ConvId, loc: LocationBody, replyTo: string | null = null, mode: SendMode = 'normal') {
     const err = this.canPost(conv);
     if (err) return this.toast(err, 'error');
     const body: Record<string, unknown> = { lat: +loc.lat.toFixed(6), lng: +loc.lng.toFixed(6) };
     if (loc.accuracy !== undefined) body.accuracy = Math.round(loc.accuracy);
     if (loc.label) body.label = loc.label.slice(0, 200);
     if (loc.current) body.current = true;
+    withMode(body, mode);
     await this.publish(await this.makeEvent(conv, 'location', body, replyTo));
   }
 
-  async sendFiles(conv: ConvId, files: File[], as: FileClass, caption = '', replyTo: string | null = null) {
+  async sendFiles(conv: ConvId, files: File[], as: FileClass, caption = '', replyTo: string | null = null, mode: SendMode = 'normal') {
     const err = this.canPost(conv);
     if (err) return this.toast(err, 'error');
     for (const [i, file] of files.entries()) {
@@ -1359,6 +1451,7 @@ export class ChatEngine {
         };
         if (cls === 'image') Object.assign(body, await imageInfo(file).catch(() => ({})));
         if (caption && i === 0) body.caption = caption.slice(0, 1000);
+        withMode(body, mode);
         const blob = new Blob([file], { type: mimeFor(file.name) });
         await db.put('files', { fileId, blob });
         this.haveFiles.add(fileId);
@@ -1633,6 +1726,7 @@ export class ChatEngine {
   async updateSettings(patch: Partial<Settings>) {
     this.settings = { ...this.settings, ...patch };
     await db.put('kv', this.settings, 'settings');
+    applyAppearance(this.settings);
     this.notify();
   }
 

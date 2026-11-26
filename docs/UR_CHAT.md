@@ -105,6 +105,27 @@ Every message is a signed **event**:
 
 Every account has a chat with itself, pinned at the top as "Name (You)", like Teams. Notes, links, photos, documents, GIFs and locations sent there are **stored only on this device**: nothing is sent to peers or to the server, and the chat never notifies. Messages show as read (blue double tick) as soon as they're saved. It's a direct-chat ID with the same user on both sides (`dm:<me>:<me>`), which peers can never write to (direct-chat events require two different participants). Entering your own ID in **New chat** opens it.
 
+## Secret and view-once messages
+
+**Right-click the Send button** (long-press on touch screens) for:
+
+- **Send secretly** (also Ctrl/⌘ + Shift + Enter): the message is masked for everyone, sender included. Text is blurred, and photos, GIFs, files and locations are heavily blurred behind "Secret message · click to view". Clicking reveals it, and **Hide** masks it again. It's masked again every time the chat is reopened.
+- **Send as view once:** the receiver sees "View once photo · Click to open". Opening shows it in a full-screen viewer, and **the stored content is deleted at that moment** (a reload can't bring it back). Closing the viewer discards the last copy and leaves an "Opened" card. The sender sees "Not opened yet", then "Opened". Once everyone has opened it, the content is removed from the sender's device too. A view-once message only counts as read when it's opened.
+- **Keep using for photos, GIFs & files:** Normal / Secret mode / View once mode applies to everything sent until switched off, and a banner shows the active mode.
+
+Previews, replies, search, notifications, the photo gallery and Shared media only ever show "Secret message" or "View once …". These features protect against casual viewing; they can't stop screenshots, cameras or a modified app.
+
+## Settings
+
+The Settings tabs are Profile, **Appearance**, **Notifications**, Your chat ID, Login code and Privacy & data.
+
+**Appearance:**
+- theme (Light, Dark, Same as device)
+- text size (Small to Extra large), with a live preview
+- message spacing (Comfortable, Compact)
+- time format (Automatic, 12-hour, 24-hour)
+- Press Enter to send
+
 ## Notifications
 
 These work like Teams, for **new messages** only. Muted conversations never notify. Messages older than 2 minutes, for example ones caught up after reconnecting, update the counts but don't pop up or play a sound.

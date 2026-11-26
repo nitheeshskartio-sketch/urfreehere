@@ -65,3 +65,46 @@
 .speaking-ring {
   animation: mic-speak 1.1s ease-out infinite;
 }
+
+/* UR Chat appearance settings (text size and spacing), set on <html> by the chat app. */
+:root {
+  --chat-text: 14px;
+  --chat-meta: 12px;
+  --chat-name: 14px;
+}
+html[data-chat-text='sm'] {
+  --chat-text: 13px;
+  --chat-meta: 11px;
+  --chat-name: 13px;
+}
+html[data-chat-text='lg'] {
+  --chat-text: 16px;
+  --chat-meta: 13px;
+  --chat-name: 15.5px;
+}
+html[data-chat-text='xl'] {
+  --chat-text: 18px;
+  --chat-meta: 14px;
+  --chat-name: 17px;
+}
+.chat-text {
+  font-size: var(--chat-text);
+  line-height: 1.45;
+}
+.chat-meta {
+  font-size: var(--chat-meta);
+}
+.chat-name {
+  font-size: var(--chat-name);
+}
+html[data-chat-density='compact'] .chat-bubble {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+html[data-chat-density='compact'] .chat-row-first {
+  margin-top: 8px;
+}
+html[data-chat-density='compact'] .chat-list-row {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}

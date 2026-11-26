@@ -1,8 +1,8 @@
-import { FileText, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, Smile, X } from 'lucide-react';
+import { Check, EyeOff, FileText, Flame, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, Smile, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useEngine } from '../hooks';
 import { DOCUMENT_ACCEPT, IMAGE_ACCEPT, classify } from '../lib/media';
-import type { StoredEvent } from '../lib/types';
+import type { SendMode, StoredEvent } from '../lib/types';
 import { ExpressionPicker } from './ExpressionPicker';
 import { LocationPicker } from './LocationPicker';
 import { Menu } from '../../../ui/Menu';
@@ -19,6 +19,22 @@ export function Composer({
   const e = useEngine();
   const [text, setText] = useState('');
   const [emojiOpen, setEmojiOpen] = useState(false);
+  /** Applies to everything sent from this box until changed: normal, secret (masked) or view once. */
+  const [mode, setMode] = useState<SendMode>('normal');
+  const [sendMenu, setSendMenu] = useState(false);
+  const sendWrap = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!sendMenu) return;
+    const close = (ev: MouseEvent) => !sendWrap.current?.contains(ev.target as Node) && setSendMenu(false);
+    const esc = (ev: globalThis.KeyboardEvent) => ev.key === 'Escape' && setSendMenu(false);
+    document.addEventListener('mousedown', close);
+    window.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [sendMenu]);
   const [locationOpen, setLocationOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
@@ -49,15 +65,19 @@ export function Composer({
     if (v.trim()) e.sendTyping(convId);
   };
 
-  const send = () => {
+  const send = (as: SendMode = mode) => {
     if (!text.trim()) return;
-    void e.sendText(convId, text, replyTo?.id ?? null);
+    void e.sendText(convId, text, replyTo?.id ?? null, as);
     update('');
     onCancelReply();
     setEmojiOpen(false);
   };
 
   const onKey = (ev: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (ev.key === 'Enter' && ev.shiftKey && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault();
+      return send('secret');
+    }
     if (ev.key === 'Enter' && !ev.shiftKey && e.settings.enterToSend && !ev.nativeEvent.isComposing) {
       ev.preventDefault();
       send();
@@ -68,8 +88,8 @@ export function Composer({
     if (!files.length) return;
     const images = files.filter((f) => classify(f.name) === 'image');
     const docs = files.filter((f) => !images.includes(f));
-    if (as === 'image' || images.length) void e.sendFiles(convId, as === 'image' ? files : images, 'image', '', replyTo?.id ?? null);
-    if (as !== 'image' && docs.length) void e.sendFiles(convId, docs, 'document', '', replyTo?.id ?? null);
+    if (as === 'image' || images.length) void e.sendFiles(convId, as === 'image' ? files : images, 'image', '', replyTo?.id ?? null, mode);
+    if (as !== 'image' && docs.length) void e.sendFiles(convId, docs, 'document', '', replyTo?.id ?? null, mode);
     onCancelReply();
   };
 
@@ -96,7 +116,30 @@ export function Composer({
   return (
     <div className="shrink-0 px-3 pb-3 pt-1 sm:px-5 sm:pb-4">
       {/* Teams-style compose box: an underline in the brand colour shows focus */}
-      <div className="relative rounded-md border border-line bg-panel shadow-card transition-shadow focus-within:shadow-[inset_0_-2px_0_rgb(var(--c-accent)),var(--shadow-card)]">
+      <div
+        className={`relative rounded-md border bg-panel shadow-card transition-shadow focus-within:shadow-[inset_0_-2px_0_rgb(var(--c-accent)),var(--shadow-card)] ${
+          mode !== 'normal' ? 'border-accent' : 'border-line'
+        }`}
+      >
+        {mode !== 'normal' && (
+          <div className="flex items-center gap-2 rounded-t-md border-b border-line bg-accent-soft px-3 py-1.5 text-[12.5px]">
+            {mode === 'secret' ? <EyeOff className="size-4 shrink-0 text-accent" /> : <Flame className="size-4 shrink-0 text-accent" />}
+            <span className="flex-1 text-ink-soft">
+              {mode === 'secret' ? (
+                <>
+                  <span className="font-semibold">Secret mode</span>: what you send stays hidden until clicked.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">View once</span>: what you send can be opened only once, then it disappears.
+                </>
+              )}
+            </span>
+            <button type="button" onClick={() => setMode('normal')} className="shrink-0 font-semibold text-accent hover:underline">
+              Turn off
+            </button>
+          </div>
+        )}
         {replyTo && (
           <div className="flex items-center gap-3 border-b border-line px-3 py-2">
             <div className="min-w-0 flex-1 border-l-[3px] border-accent pl-2.5">
@@ -113,7 +156,7 @@ export function Composer({
           <ExpressionPicker
             onEmoji={insertEmoji}
             onGif={(g, sticker) => {
-              void e.sendGif(convId, { id: g.id, url: g.full.url, width: g.full.width, height: g.full.height, title: g.title }, sticker, replyTo?.id ?? null);
+              void e.sendGif(convId, { id: g.id, url: g.full.url, width: g.full.width, height: g.full.height, title: g.title }, sticker, replyTo?.id ?? null, mode);
               setEmojiOpen(false);
               onCancelReply();
             }}
@@ -131,7 +174,7 @@ export function Composer({
             maxLength={8000}
             placeholder="Type a message"
             aria-label="Message"
-            className="max-h-40 min-h-[36px] flex-1 resize-none bg-transparent py-2 text-[14px] leading-snug placeholder:text-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="chat-text max-h-40 min-h-[36px] flex-1 resize-none bg-transparent py-2 placeholder:text-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
           <button
             type="button"
@@ -157,15 +200,77 @@ export function Composer({
             />
           </div>
           <span className="mx-1 mb-2 h-5 w-px bg-line" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={send}
-            disabled={!text.trim()}
-            className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-md text-accent transition-colors hover:bg-accent-soft disabled:text-muted disabled:hover:bg-transparent"
-            aria-label="Send"
-          >
-            <SendHorizontal className="size-5" />
-          </button>
+          <div ref={sendWrap} className="relative mb-0.5">
+            {/* Right-click (or long-press) the Send button for secret sending, like a spoiler. */}
+            <button
+              type="button"
+              onClick={() => send()}
+              onContextMenu={(ev) => {
+                ev.preventDefault();
+                setSendMenu(true);
+              }}
+              aria-disabled={!text.trim()}
+              aria-haspopup="menu"
+              className={`flex size-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent-soft ${text.trim() ? 'text-accent' : 'text-muted'}`}
+              aria-label={mode === 'secret' ? 'Send secretly' : mode === 'once' ? 'Send as view once' : 'Send'}
+              title={mode === 'normal' ? 'Send (right-click to send secretly or as view once)' : 'Right-click for options'}
+            >
+              {mode === 'secret' ? <EyeOff className="size-5" /> : mode === 'once' ? <Flame className="size-5" /> : <SendHorizontal className="size-5" />}
+            </button>
+            {sendMenu && (
+              <div role="menu" className="absolute bottom-full right-0 z-40 mb-2 w-[260px] overflow-hidden rounded-lg border border-line bg-panel py-1 shadow-pop">
+                {(
+                  [
+                    ['secret', EyeOff, 'Send secretly', 'Hidden until clicked', 'Ctrl⇧↵'],
+                    ['once', Flame, 'Send as view once', 'Can be opened only once', ''],
+                  ] as const
+                ).map(([m, Icon, label, hint, kbd]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="menuitem"
+                    disabled={!text.trim()}
+                    onClick={() => {
+                      setSendMenu(false);
+                      send(m);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-subtle disabled:opacity-50 disabled:hover:bg-transparent"
+                  >
+                    <Icon className="size-4 shrink-0 text-muted" />
+                    <span className="flex-1">
+                      {label}
+                      <span className="block text-[11.5px] text-muted">{hint}</span>
+                    </span>
+                    {kbd && <kbd className="text-[11px] text-muted">{kbd}</kbd>}
+                  </button>
+                ))}
+                <div className="my-1 border-t border-line" />
+                <p className="px-3 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Keep using for photos, GIFs &amp; files</p>
+                {(
+                  [
+                    ['normal', 'Normal'],
+                    ['secret', 'Secret mode'],
+                    ['once', 'View once mode'],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={mode === m}
+                    onClick={() => {
+                      setSendMenu(false);
+                      setMode(m);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm hover:bg-subtle"
+                  >
+                    <span className="flex size-4 items-center justify-center">{mode === m && <Check className="size-4 text-accent" />}</span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -197,7 +302,7 @@ export function Composer({
         <LocationPicker
           onClose={() => setLocationOpen(false)}
           onSend={(loc) => {
-            void e.sendLocation(convId, loc, replyTo?.id ?? null);
+            void e.sendLocation(convId, loc, replyTo?.id ?? null, mode);
             setLocationOpen(false);
             onCancelReply();
           }}

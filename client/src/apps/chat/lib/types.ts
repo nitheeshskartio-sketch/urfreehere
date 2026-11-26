@@ -77,6 +77,8 @@ export interface StoredEvent extends ChatEvent {
   local: {
     receipts: Record<UserId, ReceiptStatus>;
     deleted?: boolean;
+    /** A view-once message that was opened (receiver) or opened by everyone (sender): content removed. */
+    opened?: boolean;
     /** Handed to at least one peer's data channel. */
     sent?: boolean;
   };
@@ -117,6 +119,9 @@ export interface GifBody {
   sticker?: boolean;
 }
 
+/** How a message is sent: normally, masked until clicked, or viewable only once. */
+export type SendMode = 'normal' | 'secret' | 'once';
+
 export interface Settings {
   enterToSend: boolean;
   /** Desktop notifications for new messages (needs browser permission). */
@@ -125,6 +130,12 @@ export interface Settings {
   notificationPreview: boolean;
   /** Play a short sound for new messages. */
   notificationSound: boolean;
+  /** Message text size. */
+  textSize: 'sm' | 'md' | 'lg' | 'xl';
+  /** Space between and inside messages. */
+  density: 'comfortable' | 'compact';
+  /** Clock style for message times. */
+  clock: 'auto' | '12h' | '24h';
 }
 
 export type FileTransferState =
