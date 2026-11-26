@@ -4,7 +4,7 @@ import { formatBytes } from '../../../lib/format';
 import { Button } from '../../../ui/Button';
 import { useEngine, useFileUrl } from '../hooks';
 import { MoodSection } from './Mood';
-import { MeterChips, MeterSection } from './Meter';
+import { ProfileMeter } from './Meter';
 import { formatUserId } from '../lib/encoding';
 import { MAX_GROUP_MEMBERS } from '../lib/groups';
 import { sanitizeName } from '../lib/media';
@@ -73,10 +73,9 @@ function ContactInfo({ conv }: { conv: Conversation }) {
         <Avatar avatar={p?.avatar} name={e.nameOf(id)} seed={id} size={96} />
         <h3 className="mt-3 text-lg font-semibold">{e.nameOf(id)}</h3>
         {p?.status && <p className="mt-1 text-sm text-muted">{p.status}</p>}
-        {contact?.state === 'contact' && <MeterChips peer={id} />}
+        {contact?.state === 'contact' && <ProfileMeter peer={id} canTap={e.convs.has(conv.id)} />}
         <p className="mt-2 text-[13px] text-muted">{st === 'connected' ? 'Connected' : st === 'connecting' ? 'Connecting…' : st === 'online' ? 'Online' : st === 'unreachable' ? "Online · can't connect right now" : 'Offline'}</p>
       </div>
-      {contact?.state === 'contact' && <MeterSection peer={id} canTap={e.convs.has(conv.id)} />}
       {contact?.state === 'contact' && <MoodSection peer={id} />}
       <Section title="Chat ID">
         <div className="flex items-center justify-between gap-2">
