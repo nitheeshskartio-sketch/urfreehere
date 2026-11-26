@@ -2,9 +2,14 @@ import { listedApps } from '../apps/registry';
 import { SITE } from './config';
 import { Link } from './Link';
 import { SiteMark } from './Logo';
+import { SupportCoffee } from './SupportCoffee';
 
 export function SiteFooter() {
   return (
+    <>
+    <div className="bg-surface pb-2">
+      <SupportCoffee />
+    </div>
     <footer className="border-t border-line bg-surface">
       <div className="page grid gap-8 py-10 sm:grid-cols-[1.4fr_1fr_1fr] sm:gap-10">
         <div>
@@ -29,6 +34,7 @@ export function SiteFooter() {
         </p>
       </div>
     </footer>
+    </>
   );
 }
 
