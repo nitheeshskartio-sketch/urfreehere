@@ -305,7 +305,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
   } else preview = self ? 'Notes, links and files for yourself' : conv.type === 'dm' ? 'No messages yet' : '';
 
   return (
-    <li className="group relative px-2">
+    <li className="group relative px-2 focus-within:z-30">
       <button
         type="button"
         onClick={onOpen}
@@ -329,7 +329,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
           </span>
         </span>
       </button>
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden">
+      <div className="absolute right-4 top-1/2 z-10 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden">
         <div className="rounded-md border border-line bg-panel shadow-card">
           <Menu
             label={`Options for ${title}`}
