@@ -357,7 +357,7 @@ function AddMembers({ groupId, onClose }: { groupId: string; onClose: () => void
 function SharedMedia({ events }: { events: StoredEvent[] }) {
   const [tab, setTab] = useState<'media' | 'docs'>('media');
   // Secret and view-once items never appear here.
-  const visible = events.filter((x) => !x.body.viewOnce && !x.body.secret);
+  const visible = events.filter((x) => !x.local.revoked && !x.body.viewOnce && !x.body.secret);
   const media = visible.filter((x) => x.kind === 'image');
   const docs = visible.filter((x) => x.kind === 'file');
   return (

@@ -6,6 +6,7 @@ import {
   BellOff,
   ChevronDown,
   EllipsisVertical,
+  Eraser,
   Inbox,
   KeyRound,
   LogOut,
@@ -25,6 +26,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { Menu } from '../../../ui/Menu';
+import { deleteChatPrompt } from './deleteChat';
 import { useEngine } from '../hooks';
 import { shortTime } from '../lib/time';
 import type { Conversation } from '../lib/types';
@@ -65,7 +67,7 @@ export function Sidebar({
 
   const q = query.trim().toLowerCase();
   const list = all
-    .filter((c) => !hiddenGroup(c))
+    .filter((c) => !c.hidden && !hiddenGroup(c))
     .filter((c) => {
       if (view === 'requests') return isRequest(c);
       if (isRequest(c)) return false;
@@ -76,8 +78,8 @@ export function Sidebar({
     .filter((c) => !q || e.convTitle(c).toLowerCase().includes(q) || (e.lastEvent(c.id) && e.describe(e.lastEvent(c.id)!).toLowerCase().includes(q)))
     .sort((a, b) => b.lastTs - a.lastTs);
 
-  const archivedCount = all.filter((c) => c.archived && !isRequest(c) && !hiddenGroup(c)).length;
-  const requestCount = all.filter(isRequest).length;
+  const archivedCount = all.filter((c) => c.archived && !c.hidden && !isRequest(c) && !hiddenGroup(c)).length;
+  const requestCount = all.filter((c) => !c.hidden && isRequest(c)).length;
 
   // Leave an emptied Requests/Archived view (e.g. after accepting the last request).
   useEffect(() => {
@@ -342,9 +344,16 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
               },
               {
                 label: 'Delete chat history',
-                icon: Trash2,
+                icon: Eraser,
                 danger: true,
                 onSelect: () => window.confirm(`Delete all messages in "${title}" from this device?`) && void e.clearHistory(conv.id),
+              },
+              {
+                label: 'Delete chat',
+                icon: Trash2,
+                danger: true,
+                hidden: self,
+                onSelect: () => window.confirm(deleteChatPrompt(e, conv, title)) && void e.deleteChat(conv.id),
               },
             ]}
           />

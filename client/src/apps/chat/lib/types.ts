@@ -52,10 +52,20 @@ export interface Conversation {
   createdAt: number;
   /** Messages at or before this time were cleared locally ("Delete chat history"). */
   clearedBefore?: number;
+  /** "Delete chat": hidden from the list until a new message arrives. */
+  hidden?: boolean;
   joining?: JoiningInfo;
 }
 
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op';
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete';
+
+/** Message reactions: one per person per message. */
+export type Reaction = 'love' | 'broken' | 'slap';
+export const REACTIONS: { id: Reaction; emoji: string; label: string }[] = [
+  { id: 'love', emoji: '❤️', label: 'Love' },
+  { id: 'broken', emoji: '💔', label: 'Broken heart' },
+  { id: 'slap', emoji: '🖐️', label: 'Slap' },
+];
 
 export interface ChatEvent {
   v: 1;
@@ -77,6 +87,8 @@ export interface StoredEvent extends ChatEvent {
   local: {
     receipts: Record<UserId, ReceiptStatus>;
     deleted?: boolean;
+    /** Deleted for everyone by its author (shows "This message was deleted"). */
+    revoked?: boolean;
     /** A view-once message that was opened (receiver) or opened by everyone (sender): content removed. */
     opened?: boolean;
     /** Handed to at least one peer's data channel. */

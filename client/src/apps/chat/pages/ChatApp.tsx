@@ -77,7 +77,8 @@ export default function ChatApp({ path }: { path: string }) {
     }
   }, [e.status, route.user, route.join]);
 
-  const activeConv = route.conv ? e.convs.get(route.conv) : undefined;
+  const routed = route.conv ? e.convs.get(route.conv) : undefined;
+  const activeConv = routed && !routed.hidden ? routed : undefined;
   useEffect(() => setInfoOpen(false), [route.conv]);
 
   const onScan = (t: ScanTarget) => {

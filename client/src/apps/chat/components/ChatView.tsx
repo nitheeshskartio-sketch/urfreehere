@@ -5,6 +5,7 @@ import {
   BellOff,
   Ban,
   EllipsisVertical,
+  Eraser,
   Info,
   LoaderCircle,
   Pin,
@@ -24,6 +25,7 @@ import { Composer } from './Composer';
 import { ImageViewer } from './ImageViewer';
 import { Menu } from '../../../ui/Menu';
 import { Message, SystemMessage } from './Message';
+import { deleteChatPrompt } from './deleteChat';
 
 export function ChatView({
   conv,
@@ -192,9 +194,16 @@ export function ChatView({
             },
             {
               label: 'Delete chat history',
-              icon: Trash2,
+              icon: Eraser,
               danger: true,
               onSelect: () => window.confirm('Delete all messages in this chat from this device?') && void e.clearHistory(conv.id),
+            },
+            {
+              label: 'Delete chat',
+              icon: Trash2,
+              danger: true,
+              hidden: self,
+              onSelect: () => window.confirm(deleteChatPrompt(e, conv, title)) && void e.deleteChat(conv.id).then(onBack),
             },
           ]}
         />

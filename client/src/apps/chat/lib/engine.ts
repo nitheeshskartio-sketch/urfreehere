@@ -28,6 +28,7 @@ import type {
   Profile,
   PublicJwk,
   ReceiptStatus,
+  Reaction,
   SendMode,
   Settings,
   StoredEvent,
@@ -78,6 +79,17 @@ function eventSignable(e: Omit<ChatEvent, 'sig'>): string {
 }
 
 const rank: Record<ReceiptStatus, number> = { delivered: 1, read: 2 };
+
+/** "Delete for everyone" is allowed this long after sending (plus clock tolerance on receivers). */
+export const DELETE_FOR_EVERYONE_MS = 5000;
+const DELETE_TOLERANCE_MS = 2000;
+/** An account must be missing from the directory this long before chats with it are purged. */
+const PURGE_AFTER_MISSING_MS = 24 * 60 * 60 * 1000;
+
+/** Real messages (not group operations, reactions or deletions). */
+export function isMessage(e: { kind: EventKind }) {
+  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete';
+}
 
 /** Applies text size, spacing and clock settings to the page. */
 function applyAppearance(s: Settings) {
@@ -151,6 +163,10 @@ function validEvent(e: unknown): e is ChatEvent {
         (b.label === undefined || (typeof b.label === 'string' && b.label.length <= 200)) &&
         (b.accuracy === undefined || (typeof b.accuracy === 'number' && b.accuracy >= 0))
       );
+    case 'react':
+      return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
+    case 'delete':
+      return typeof b.target === 'string' && b.target.length <= 64;
     case 'gif':
       return (
         typeof b.id === 'string' &&
@@ -234,6 +250,11 @@ export class ChatEngine {
   activeConv: ConvId | null = null;
 
   private events = new Map<ConvId, StoredEvent[]>();
+  /** message id -> reactions by author (latest wins) */
+  private reactions = new Map<string, Map<UserId, { r: Reaction | null; ts: number }>>();
+  /** message id -> who deleted it for everyone, and when */
+  private revocations = new Map<string, { author: UserId; ts: number }>();
+  private missingSince = new Map<UserId, number>();
   private byId = new Map<string, StoredEvent>();
   private byFile = new Map<string, StoredEvent>();
   private seqs = new Map<ConvId, Map<UserId, Set<number>>>();
@@ -334,6 +355,7 @@ export class ChatEngine {
       // Only an account the server confirmed it stored counts. (An older "registered" flag could be
       // set while the server ran without MongoDB; such devices simply register again.)
       this.registered = (await db.get<boolean>('kv', 'accountConfirmed')) ?? false;
+      for (const [k, v] of Object.entries((await db.get<Record<string, number>>('kv', 'missingSince')) ?? {})) this.missingSince.set(k, v);
       for (const c of await db.getAll<Contact>('contacts')) this.contacts.set(c.userId, c);
       for (const c of await db.getAll<Conversation>('convs')) this.convs.set(c.id, c);
       for (const [k, v] of Object.entries((await db.get<Record<string, Profile>>('kv', 'profiles')) ?? {})) this.profiles.set(k, v);
@@ -492,6 +514,7 @@ export class ChatEngine {
       const c = this.contacts.get(p.userId);
       if (c && !c.pub) this.saveContact({ ...c, pub: p.publicKey as PublicJwk });
     }
+    if (res.enabled) void this.noteMissing(ids.filter((id) => id !== this.me), found);
     return { enabled: res.enabled, found };
   }
 
@@ -529,6 +552,8 @@ export class ChatEngine {
     this.signaling.start();
     if (this.listenersAttached) return;
     this.listenersAttached = true;
+    // Re-check contacts in the account directory (names, pictures, removed accounts).
+    window.setInterval(() => void this.refreshDirectory(), 6 * 60 * 60 * 1000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.activeConv) this.markRead(this.activeConv);
       if (document.visibilityState === 'hidden') void this.flushWrites();
@@ -563,6 +588,30 @@ export class ChatEngine {
     if (this.identity && e.author === this.identity.userId) {
       this.mySeq.set(e.conv, Math.max(this.mySeq.get(e.conv) ?? 0, e.seq));
     }
+    const b = e.body as Record<string, unknown>;
+    if (e.kind === 'react' && !e.local.deleted) {
+      let m = this.reactions.get(String(b.target));
+      if (!m) this.reactions.set(String(b.target), (m = new Map()));
+      const cur = m.get(e.author);
+      if (!cur || cur.ts <= e.ts) m.set(e.author, { r: (b.r as Reaction | null) ?? null, ts: e.ts });
+    } else if (e.kind === 'delete' && !e.local.deleted) {
+      this.revocations.set(String(b.target), { author: e.author, ts: e.ts });
+      const target = this.byId.get(String(b.target));
+      if (target) this.applyRevocation(target);
+    } else if (this.revocations.has(e.id)) {
+      this.applyRevocation(e);
+    }
+  }
+
+  /** Honour "delete for everyone" only from the message's author, within the time window. */
+  private applyRevocation(target: StoredEvent) {
+    const rv = this.revocations.get(target.id);
+    if (!rv || target.local.revoked || rv.author !== target.author || !isMessage(target)) return;
+    if (rv.ts - target.ts > DELETE_FOR_EVERYONE_MS + DELETE_TOLERANCE_MS || rv.ts < target.ts) return;
+    if (target.kind === 'image' || target.kind === 'file') void this.dropFile(String((target.body as Record<string, unknown>).fileId));
+    target.body = {};
+    target.local.revoked = true;
+    this.queueWrite('events', target.id, target);
   }
 
   /** Highest contiguous sequence per author: "I have everything up to here". */
@@ -589,7 +638,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = c?.clearedBefore ?? 0;
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut);
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -681,6 +730,7 @@ export class ChatEngine {
   }
 
   describe(e: StoredEvent): string {
+    if (e.local.revoked) return 'This message was deleted';
     // Never reveal a secret or view-once message in previews, replies, search or notifications.
     const fl = e.body as Record<string, unknown>;
     if (fl.viewOnce === true && e.kind !== 'op') {
@@ -702,6 +752,8 @@ export class ChatEngine {
         return b.sticker ? 'Sticker' : 'GIF';
       case 'op':
         return this.describeOp(e);
+      default:
+        return '';
     }
   }
 
@@ -1044,7 +1096,7 @@ export class ChatEngine {
       this.sendTo(peer, { t: 'events', conv, events: [], done: true });
       return;
     }
-    const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.opened && e.seq > (Number(vector?.[e.author]) || 0));
+    const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.opened && !e.local.revoked && e.seq > (Number(vector?.[e.author]) || 0));
     // Group operations first so the receiver can verify the messages that follow.
     want.sort((a, b) => (a.kind === 'op' ? 0 : 1) - (b.kind === 'op' ? 0 : 1) || a.ts - b.ts);
     const strip = (e: StoredEvent): ChatEvent => ({
@@ -1154,8 +1206,11 @@ export class ChatEngine {
     if (!conv && e.conv.startsWith('dm:')) conv = this.ensureDm(e.author === this.me ? e.conv.slice(3).split(':').find((u) => u !== this.me)! : e.author, 'request');
     if (!conv) return;
     const next = { ...conv };
-    if (e.ts > next.lastTs) next.lastTs = e.ts;
-    if (e.author !== this.me && e.kind !== 'op' && !(this.activeConv === e.conv && document.visibilityState === 'visible')) {
+    const msg = isMessage(e);
+    if (msg && e.ts > next.lastTs) next.lastTs = e.ts;
+    // A deleted chat comes back when a new message arrives.
+    if (msg && next.hidden && e.ts > (next.clearedBefore ?? 0)) next.hidden = false;
+    if (e.author !== this.me && msg && !(this.activeConv === e.conv && document.visibilityState === 'visible')) {
       next.unread += 1;
       if (next.archived && !next.muted) next.archived = false;
     }
@@ -1211,7 +1266,10 @@ export class ChatEngine {
   }
 
   private onNewIncoming(e: StoredEvent) {
-    if (e.kind === 'op') return;
+    if (!isMessage(e)) {
+      if (e.kind !== 'op') this.notify();
+      return;
+    }
     for (const l of this.incomingListeners) l(e);
     const conv = this.convs.get(e.conv);
     const accepted = e.conv.startsWith('g:') || this.contacts.get(e.author)?.state === 'contact';
@@ -1315,7 +1373,7 @@ export class ChatEngine {
     const accepted = conv.startsWith('g:') || this.contacts.get(c.peerId!)?.state === 'contact';
     if (!accepted || document.visibilityState !== 'visible') return this.notify();
     for (const e of this.events.get(conv) ?? []) {
-      if (e.author !== this.me && e.kind !== 'op' && e.local.receipts[this.me] !== 'read' && (e.body as Record<string, unknown>).viewOnce !== true)
+      if (e.author !== this.me && isMessage(e) && e.local.receipts[this.me] !== 'read' && (e.body as Record<string, unknown>).viewOnce !== true)
         this.queueReceipt(e, 'read');
     }
     this.notify();
@@ -1631,7 +1689,11 @@ export class ChatEngine {
     }
     const c = this.contacts.get(peer);
     if (c?.state === 'request') this.saveContact({ ...c, state: 'contact' });
-    const conv = this.ensureDm(peer, 'contact');
+    let conv = this.ensureDm(peer, 'contact');
+    if (conv.hidden) {
+      conv = { ...conv, hidden: false, lastTs: Date.now() };
+      this.saveConv(conv);
+    }
     this.refreshWatch();
     this.maybeConnect(peer);
     void this.lookupUsers([peer]);
@@ -1683,13 +1745,125 @@ export class ChatEngine {
   async deleteLocal(ids: string[]) {
     for (const id of ids) {
       const e = this.byId.get(id);
-      if (!e || e.kind === 'op') continue;
+      if (!e || !isMessage(e)) continue;
       if (e.kind === 'image' || e.kind === 'file') await this.dropFile((e.body as unknown as FileBody).fileId);
       e.local.deleted = true;
       e.body = {};
       this.queueWrite('events', e.id, e);
     }
     this.notify();
+  }
+
+  // ------------------------------------------------------------ reactions
+
+  /** Counts per reaction and my own, for a message. */
+  reactionsOf(id: string): { counts: Record<Reaction, number>; mine: Reaction | null } {
+    const counts: Record<Reaction, number> = { love: 0, broken: 0, slap: 0 };
+    let mine: Reaction | null = null;
+    for (const [author, v] of this.reactions.get(id) ?? []) {
+      if (!v.r) continue;
+      counts[v.r]++;
+      if (author === this.me) mine = v.r;
+    }
+    return { counts, mine };
+  }
+
+  /** One reaction per person: picking another replaces it, picking the same removes it. */
+  async react(target: StoredEvent, r: Reaction) {
+    if (!isMessage(target) || target.local.revoked) return;
+    const err = this.canPost(target.conv);
+    if (err) return this.toast(err, 'error');
+    const next = this.reactionsOf(target.id).mine === r ? null : r;
+    await this.publish(await this.makeEvent(target.conv, 'react', { target: target.id, r: next }));
+  }
+
+  /** Seconds left to delete one of my messages for everyone (0 = too late). */
+  deleteWindowLeft(e: StoredEvent): number {
+    if (e.author !== this.me || !isMessage(e) || e.local.revoked || this.isSelfChat(e.conv)) return 0;
+    return Math.max(0, DELETE_FOR_EVERYONE_MS - (Date.now() - e.ts));
+  }
+
+  /** Deletes for everyone within 5 seconds of sending; afterwards only for me. Returns what happened. */
+  async deleteForEveryone(id: string): Promise<'everyone' | 'me'> {
+    const e = this.byId.get(id);
+    if (!e) return 'me';
+    if (this.deleteWindowLeft(e) <= 0) {
+      await this.deleteLocal([id]);
+      return 'me';
+    }
+    await this.publish(await this.makeEvent(e.conv, 'delete', { target: id }));
+    return 'everyone';
+  }
+
+  /** "Delete chat": removes it from the list and deletes its history on this device. */
+  async deleteChat(conv: ConvId) {
+    const c = this.convs.get(conv);
+    if (!c) return;
+    if (c.groupId && this.isMember(c.groupId) && !this.groups.get(c.groupId)?.deleted) await this.leaveGroup(c.groupId).catch(() => {});
+    await this.clearHistory(conv);
+    if (this.isSelfChat(conv)) return; // your personal chat stays, just emptied
+    const now = this.convs.get(conv)!;
+    this.saveConv({ ...now, hidden: true, pinned: false, unread: 0 });
+    if (this.activeConv === conv) this.activeConv = null;
+    this.notify();
+  }
+
+  // --------------------------------------------------------------- purge
+
+  /**
+   * Someone's account is gone from the directory (removed after inactivity):
+   * delete our direct chat and every message they sent in groups, on this device.
+   */
+  private async purgeUser(userId: UserId) {
+    if (userId === this.me) return;
+    const name = this.profiles.get(userId)?.name;
+    const dm = dmId(this.me, userId);
+    let removed = false;
+    if (this.convs.has(dm)) {
+      await this.clearHistory(dm);
+      const c = this.convs.get(dm)!;
+      this.saveConv({ ...c, hidden: true, pinned: false, unread: 0 });
+      removed = true;
+    }
+    for (const [conv, list] of this.events) {
+      if (!conv.startsWith('g:')) continue;
+      const theirs = list.filter((e) => e.author === userId && isMessage(e) && !e.local.deleted).map((e) => e.id);
+      if (theirs.length) {
+        await this.deleteLocal(theirs);
+        removed = true;
+      }
+    }
+    this.sessions.get(userId)?.close('purged');
+    this.receiptQueue.delete(userId);
+    this.contacts.delete(userId);
+    void db.delete('contacts', userId);
+    this.profiles.delete(userId);
+    this.directoryKeys.delete(userId);
+    void db.put('kv', Object.fromEntries(this.profiles), 'profiles');
+    if (removed) this.toast(`Chats with ${name ?? 'a removed account'} were deleted because their account no longer exists.`);
+    this.notify();
+  }
+
+  private async noteMissing(requested: UserId[], found: Set<UserId>) {
+    const now = Date.now();
+    let changed = false;
+    for (const id of requested) {
+      if (id === this.me) continue;
+      if (found.has(id)) {
+        if (this.missingSince.delete(id)) changed = true;
+        continue;
+      }
+      const since = this.missingSince.get(id);
+      if (!since) {
+        this.missingSince.set(id, now);
+        changed = true;
+      } else if (now - since >= PURGE_AFTER_MISSING_MS) {
+        this.missingSince.delete(id);
+        changed = true;
+        await this.purgeUser(id);
+      }
+    }
+    if (changed) void db.put('kv', Object.fromEntries(this.missingSince), 'missingSince');
   }
 
   async clearHistory(conv: ConvId) {

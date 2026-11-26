@@ -1,4 +1,4 @@
-import { Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import { Ban, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatBytes } from '../../../lib/format';
 import { useEngine, useFileUrl } from '../hooks';
@@ -7,7 +7,7 @@ import { formatCoord, mapsLink } from '../lib/geo';
 import { isEmojiOnly, linkify } from '../lib/linkify';
 import { extOf, sanitizeName } from '../lib/media';
 import { clockTime } from '../lib/time';
-import type { FileBody, GifBody, LocationBody, StoredEvent } from '../lib/types';
+import { REACTIONS, type FileBody, type GifBody, type LocationBody, type Reaction, type StoredEvent } from '../lib/types';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { Menu } from '../../../ui/Menu';
 import { Ticks } from './Ticks';
@@ -46,6 +46,34 @@ export function Message({
   const sticker = event.kind === 'gif' && !!(body as { sticker?: boolean }).sticker && !viewOnce;
   const media = (event.kind === 'image' || event.kind === 'location' || event.kind === 'gif') && !viewOnce;
   const fullTime = new Date(event.ts).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const revoked = !!event.local.revoked;
+  const reactions = e.reactionsOf(event.id);
+
+  // "Delete for everyone" is only offered for 5 seconds after sending.
+  const [, tick] = useState(0);
+  const windowLeft = e.deleteWindowLeft(event);
+  useEffect(() => {
+    if (windowLeft <= 0) return;
+    const t = window.setTimeout(() => tick((n) => n + 1), Math.min(1000, windowLeft + 20));
+    return () => window.clearTimeout(t);
+  });
+  const deleteEveryone = () =>
+    void e.deleteForEveryone(event.id).then((how) => how === 'me' && e.toast('Too late to delete for everyone, so it was deleted only for you.'));
+  const deleteMe = () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]);
+  const react = (r: Reaction) => void e.react(event, r);
+  const noCopy = event.kind === 'image' || event.kind === 'gif' || viewOnce || (secret && !revealed) || revoked;
+  const menuItems = [
+    { label: 'Reply', icon: Reply, onSelect: () => onReply(event), hidden: revoked },
+    { label: 'Copy', icon: Copy, onSelect: copy, hidden: noCopy },
+    {
+      label: `Delete for everyone (${Math.ceil(windowLeft / 1000)}s)`,
+      icon: Undo2,
+      danger: true,
+      hidden: windowLeft <= 0,
+      onSelect: deleteEveryone,
+    },
+    { label: 'Delete for me', icon: Trash2, danger: true, onSelect: deleteMe },
+  ];
 
   return (
     <div className={`group flex gap-2.5 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-0.5'}`} id={`m-${event.id}`}>
@@ -63,10 +91,10 @@ export function Message({
           <div className="relative min-w-0" title={fullTime}>
             <div
               className={`min-w-0 ${
-                bigEmoji || sticker ? '' : `rounded-md ${media ? 'p-1' : 'chat-bubble px-3 py-2'} ${mine ? 'bg-bubble-own' : 'bg-panel shadow-card'}`
+                (bigEmoji || sticker) && !revoked ? '' : `rounded-md ${media && !revoked ? 'p-1' : 'chat-bubble px-3 py-2'} ${mine ? 'bg-bubble-own' : 'bg-panel shadow-card'}`
               }`}
             >
-              {event.replyTo && (
+              {event.replyTo && !revoked && (
                 <button
                   type="button"
                   onClick={() => replied && onJump(replied.id)}
@@ -76,7 +104,12 @@ export function Message({
                   <span className="line-clamp-2 text-[13px] text-muted">{replied ? e.describe(replied) : 'Original message not available'}</span>
                 </button>
               )}
-              {viewOnce ? (
+              {revoked ? (
+                <p className="chat-text flex items-center gap-1.5 italic text-muted">
+                  <Ban className="size-3.5" />
+                  {mine ? 'You deleted this message' : 'This message was deleted'}
+                </p>
+              ) : viewOnce ? (
                 <ViewOnceCard event={event} mine={mine} />
               ) : (
               <SecretCover active={secret} revealed={revealed} onReveal={() => setRevealed(true)} onHide={() => setRevealed(false)} media={media}>
@@ -96,27 +129,36 @@ export function Message({
             {/* Hover action bar, like Teams */}
             <div
               className={`absolute -top-4 z-10 flex items-center rounded-md border border-line bg-panel shadow-card opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden ${
-                mine ? 'right-1' : 'left-auto right-1'
+                mine ? 'right-1' : 'left-1'
               }`}
             >
-              <button type="button" onClick={() => onReply(event)} className="p-1.5 text-muted hover:text-accent" aria-label="Reply" title="Reply">
-                <Reply className="size-4" />
-              </button>
-              <Menu
-                label="Message options"
-                align="right"
-                trigger={<EllipsisVertical className="size-4" />}
-                items={[
-                  { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
-                  { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' || event.kind === 'gif' || viewOnce || (secret && !revealed) },
-                  {
-                    label: 'Delete for me',
-                    icon: Trash2,
-                    danger: true,
-                    onSelect: () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]),
-                  },
-                ]}
-              />
+              {!revoked && (
+                <>
+                  {REACTIONS.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => react(r.id)}
+                      className={`grid size-7 place-items-center text-[15px] leading-none transition-transform hover:scale-125 ${reactions.mine === r.id ? 'rounded bg-accent-soft' : ''}`}
+                      aria-label={reactions.mine === r.id ? `Remove ${r.label} reaction` : `React with ${r.label}`}
+                      aria-pressed={reactions.mine === r.id}
+                      title={r.label}
+                    >
+                      {r.emoji}
+                    </button>
+                  ))}
+                  <span className="mx-0.5 h-4 w-px bg-line" />
+                  <button type="button" onClick={() => onReply(event)} className="p-1.5 text-muted hover:text-accent" aria-label="Reply" title="Reply">
+                    <Reply className="size-4" />
+                  </button>
+                </>
+              )}
+              {windowLeft > 0 && (
+                <button type="button" onClick={deleteEveryone} className="p-1.5 text-danger hover:bg-danger/10" aria-label="Delete for everyone" title={`Delete for everyone (${Math.ceil(windowLeft / 1000)}s left)`}>
+                  <Undo2 className="size-4" />
+                </button>
+              )}
+              <Menu label="Message options" align="right" trigger={<EllipsisVertical className="size-4" />} items={menuItems} />
             </div>
           </div>
           {mine && <Ticks status={e.deliveryOf(event)} className="mb-0.5 shrink-0" />}
@@ -127,13 +169,36 @@ export function Message({
               align={mine ? 'right' : 'left'}
               trigger={<EllipsisVertical className="size-4" />}
               items={[
-                { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
-                { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' || event.kind === 'gif' || viewOnce || (secret && !revealed) },
-                { label: 'Delete for me', icon: Trash2, danger: true, onSelect: () => window.confirm('Delete this message from this device?') && void e.deleteLocal([event.id]) },
+                ...REACTIONS.map((r) => ({
+                  label: `${r.emoji} ${reactions.mine === r.id ? `Remove ${r.label.toLowerCase()}` : r.label}`,
+                  onSelect: () => react(r.id),
+                  hidden: revoked,
+                })),
+                ...menuItems,
               ]}
             />
           </div>
         </div>
+        {!revoked && REACTIONS.some((r) => reactions.counts[r.id] > 0) && (
+          <div className={`-mt-1.5 flex flex-wrap gap-1 px-1 ${mine ? 'mr-5 justify-end' : 'ml-1'}`}>
+            {REACTIONS.filter((r) => reactions.counts[r.id] > 0).map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => react(r.id)}
+                aria-pressed={reactions.mine === r.id}
+                aria-label={`${r.label}: ${reactions.counts[r.id]}${reactions.mine === r.id ? ', including you' : ''}`}
+                title={reactions.mine === r.id ? `You reacted with ${r.label.toLowerCase()} (click to remove)` : `React with ${r.label.toLowerCase()}`}
+                className={`relative z-[1] inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[12px] font-medium shadow-sm ${
+                  reactions.mine === r.id ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel text-ink-soft hover:border-accent/50'
+                }`}
+              >
+                <span className="text-[13px] leading-none">{r.emoji}</span>
+                {reactions.counts[r.id]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
