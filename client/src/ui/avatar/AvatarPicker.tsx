@@ -96,13 +96,13 @@ export function AvatarPicker({
                 onClick={() => onChange(ref)}
                 aria-label={`Use ${id.replace('-', ' ')} picture`}
                 aria-pressed={selected}
-                className={`relative aspect-square overflow-hidden rounded-full ring-offset-2 transition ${
+                className={`relative aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-panel transition ${
                   selected ? 'ring-2 ring-accent' : 'hover:ring-2 hover:ring-line-strong'
                 }`}
               >
                 <AvatarArt refId={ref} />
                 {selected && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-ink/25">
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/25">
                     <Check className="size-4 text-white" strokeWidth={3} />
                   </span>
                 )}

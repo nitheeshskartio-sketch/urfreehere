@@ -27,7 +27,7 @@ export function LoginCodeBox({ code, name, revealed: initial = false }: { code: 
         <button
           type="button"
           onClick={() => setRevealed((r) => !r)}
-          className="rounded-md p-1.5 text-muted hover:bg-white hover:text-ink"
+          className="rounded-md p-1.5 text-muted hover:bg-panel hover:text-ink"
           aria-label={revealed ? 'Hide login code' : 'Show login code'}
         >
           {revealed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

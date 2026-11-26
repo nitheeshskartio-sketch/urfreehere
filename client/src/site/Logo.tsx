@@ -4,12 +4,12 @@ import { SITE } from './config';
 export function SiteMark({ className = 'size-8' }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
-      <rect width="32" height="32" rx="8" fill="rgb(var(--c-ink))" />
+      <rect width="32" height="32" rx="8" fill="rgb(var(--c-accent))" />
       <path d="M7.5 10.5v6.25a4 4 0 0 0 8 0V10.5" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
       <path
         d="M19 22V10.5h3.75a3.4 3.4 0 0 1 0 6.8H19m3.6 0 3.15 4.7"
         fill="none"
-        stroke="rgb(var(--c-accent-soft))"
+        stroke="#fff"
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"

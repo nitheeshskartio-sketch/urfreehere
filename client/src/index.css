@@ -12,7 +12,7 @@
     scroll-padding-top: calc(var(--header-h) + 16px);
   }
   body {
-    @apply bg-white font-sans text-ink antialiased;
+    @apply bg-panel font-sans text-ink antialiased;
     font-feature-settings: 'cv11', 'ss01';
   }
   :focus-visible {

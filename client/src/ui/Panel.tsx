@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 
 export function Panel({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={`rounded-xl border border-line bg-white shadow-card ${className}`} {...props} />;
+  return <div className={`rounded-xl border border-line bg-panel shadow-card ${className}`} {...props} />;
 }
 
 export function PanelHeader({

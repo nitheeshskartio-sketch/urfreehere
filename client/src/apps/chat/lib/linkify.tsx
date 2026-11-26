@@ -22,7 +22,7 @@ export function linkify(text: string): ReactNode[] {
     }
     out.push(
       safe ? (
-        <a key={start} href={url} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-accent underline-offset-2 hover:underline">
+        <a key={start} href={url} target="_blank" rel="noopener noreferrer nofollow" className="text-accent underline-offset-2 [overflow-wrap:anywhere] hover:underline">
           {url}
         </a>
       ) : (

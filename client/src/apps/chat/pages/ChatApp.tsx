@@ -4,6 +4,7 @@ import { Avatar } from '../../../ui/avatar/Avatar';
 import { LoginCodeDialog } from '../components/LoginCode';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../../../lib/router';
+import { AppRail, TopBar } from '../components/AppShell';
 import { ChatView } from '../components/ChatView';
 import { InviteDialog, JoinDialog, NewChatDialog, NewGroupDialog, ScanDialog } from '../components/Dialogs';
 import { InfoPanel } from '../components/InfoPanel';
@@ -38,6 +39,7 @@ export default function ChatApp({ path }: { path: string }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [joinKey, setJoinKey] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [inviteFor, setInviteFor] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,7 +92,7 @@ export default function ChatApp({ path }: { path: string }) {
   if (e.status === 'unsupported' || e.status === 'error') {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
-        <div className="max-w-sm rounded-xl border border-line bg-white p-6 text-center shadow-card">
+        <div className="max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card">
           <CircleAlert className="mx-auto size-8 text-danger" />
           <h1 className="mt-3 text-lg font-semibold">{e.status === 'unsupported' ? 'Browser not supported' : "UR Chat couldn't start"}</h1>
           <p className="mt-2 text-sm text-muted">
@@ -112,7 +114,7 @@ export default function ChatApp({ path }: { path: string }) {
   if (e.status === 'expired') {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
-        <div className="max-w-sm rounded-xl border border-line bg-white p-6 text-center shadow-card">
+        <div className="max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card">
           <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-warning-soft text-warning">
             <UserX className="size-6" />
           </span>
@@ -140,16 +142,23 @@ export default function ChatApp({ path }: { path: string }) {
   const infoInline = wide && infoOpen && activeConv;
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-white">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-rail">
+      {/* On phones the open conversation uses the whole screen, like the Teams app. */}
+      <div className={showChat && !desktop ? 'hidden' : ''}>
+        <TopBar query={query} onQuery={setQuery} onProfile={() => setDialog('settings')} />
+      </div>
+      <div className="flex min-h-0 flex-1">
+      <AppRail onSettings={() => setDialog('settings')} />
+      <div className="flex min-w-0 flex-1 overflow-hidden bg-canvas md:rounded-tl-lg md:border-l md:border-t md:border-line">
       {showList && (
-        <aside className="flex w-full shrink-0 flex-col border-r border-line md:w-[340px] lg:w-[380px]">
-          <Sidebar activeId={activeConv?.id ?? null} onOpen={open} onDialog={setDialog} />
+        <aside className="flex w-full shrink-0 flex-col border-r border-line md:w-[320px] lg:w-[340px]">
+          <Sidebar activeId={activeConv?.id ?? null} onOpen={open} onDialog={setDialog} query={query} onQuery={setQuery} />
         </aside>
       )}
 
       {desktop && !activeConv && (
-        <main className="hidden flex-1 flex-col items-center justify-center bg-[#F4F6FA] p-8 text-center md:flex">
-          <span className="flex size-16 items-center justify-center rounded-2xl bg-white text-accent shadow-card">
+        <main className="hidden flex-1 flex-col items-center justify-center bg-canvas p-8 text-center md:flex">
+          <span className="flex size-16 items-center justify-center rounded-2xl bg-panel text-accent shadow-card">
             <MessagesSquare className="size-8" />
           </span>
           <h1 className="mt-5 text-xl font-semibold tracking-tight">UR Chat</h1>
@@ -180,12 +189,14 @@ export default function ChatApp({ path }: { path: string }) {
             <InfoPanel conv={activeConv} onClose={() => setInfoOpen(false)} onInvite={() => activeConv.groupId && setInviteFor(activeConv.groupId)} onOpenChat={(id) => { const c = engine.startDirectChat(id); if (c) open(c); }} />
           </aside>
         ) : (
-          <div className="fixed inset-0 z-40 flex justify-end bg-ink/30" onMouseDown={(ev) => ev.target === ev.currentTarget && setInfoOpen(false)}>
+          <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onMouseDown={(ev) => ev.target === ev.currentTarget && setInfoOpen(false)}>
             <aside className="h-full w-full max-w-[400px] shadow-pop">
               <InfoPanel conv={activeConv} onClose={() => setInfoOpen(false)} onInvite={() => activeConv.groupId && setInviteFor(activeConv.groupId)} onOpenChat={(id) => { const c = engine.startDirectChat(id); if (c) open(c); }} />
             </aside>
           </div>
         ))}
+      </div>
+      </div>
 
       {dialog === 'new-chat' && <NewChatDialog onClose={() => setDialog(null)} onOpen={open} onScan={() => setDialog('scan')} />}
       {dialog === 'new-group' && <NewGroupDialog onClose={() => setDialog(null)} onOpen={open} />}
@@ -210,7 +221,7 @@ function SignedInNotice({ onSignOut, dialog, onCloseDialog }: { onSignOut: () =>
   const p = e.profile!;
   return (
     <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-sm rounded-xl border border-line bg-white p-6 text-center shadow-card">
+      <div className="w-full max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card">
         <Avatar avatar={p.avatar} name={p.name} seed={e.me} size={64} className="mx-auto" />
         <h1 className="mt-4 text-lg font-semibold">You're signed in as {p.name}</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">To use a different account on this device, sign out first.</p>
@@ -234,8 +245,8 @@ function Toasts() {
       {e.toasts.map((t) => {
         const Icon = t.tone === 'error' ? CircleAlert : t.tone === 'success' ? CircleCheck : Info;
         return (
-          <div key={t.id} className="pointer-events-auto flex max-w-md items-center gap-2.5 rounded-lg bg-ink px-3.5 py-2.5 text-sm text-white shadow-pop">
-            <Icon className={`size-4 shrink-0 ${t.tone === 'error' ? 'text-red-300' : t.tone === 'success' ? 'text-green-300' : 'text-slate-300'}`} />
+          <div key={t.id} className="pointer-events-auto flex max-w-md items-center gap-2.5 rounded-lg bg-inverse px-3.5 py-2.5 text-sm text-on-inverse shadow-pop">
+            <Icon className={`size-4 shrink-0 ${'text-on-inverse/70'}`} />
             <span>{t.text}</span>
             <button type="button" onClick={() => e.dismissToast(t.id)} className="ml-1 rounded p-0.5 text-white/60 hover:text-white" aria-label="Dismiss">
               <X className="size-3.5" />

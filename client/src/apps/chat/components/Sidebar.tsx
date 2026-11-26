@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   ArrowLeft,
   BellOff,
+  ChevronDown,
   EllipsisVertical,
   Inbox,
   KeyRound,
@@ -13,40 +14,43 @@ import {
   QrCode,
   Search,
   Settings,
+  SquarePen,
   Trash2,
   Users,
   WifiOff,
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from '../../../site/Link';
-import { SiteMark } from '../../../site/Logo';
 import { Button } from '../../../ui/Button';
-import { useEngine } from '../hooks';
-import type { Conversation } from '../lib/types';
-import { shortTime } from '../lib/time';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { Menu } from '../../../ui/Menu';
+import { useEngine } from '../hooks';
+import { shortTime } from '../lib/time';
+import type { Conversation } from '../lib/types';
 import { Ticks } from './Ticks';
 
 export type Dialog = 'new-chat' | 'new-group' | 'join' | 'scan' | 'settings' | 'sign-out' | null;
 
-type Filter = 'all' | 'dm' | 'group' | 'unread';
+type Filter = 'unread' | 'dm' | 'group' | null;
 
+/** Teams-style chat list: heading, filter chips, Pinned and Recent sections. */
 export function Sidebar({
   activeId,
   onOpen,
   onDialog,
+  query,
+  onQuery,
 }: {
   activeId: string | null;
   onOpen: (convId: string) => void;
   onDialog: (d: Dialog) => void;
+  query: string;
+  onQuery: (q: string) => void;
 }) {
   const e = useEngine();
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>(null);
   const [view, setView] = useState<'chats' | 'archived' | 'requests'>('chats');
-  const me = e.profile!;
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const all = useMemo(() => [...e.convs.values()], [e.version]);
   const requestIds = new Set(e.requests().map((c) => c.userId));
@@ -65,42 +69,47 @@ export function Sidebar({
     })
     .filter((c) => (filter === 'dm' ? c.type === 'dm' : filter === 'group' ? c.type === 'group' : filter === 'unread' ? c.unread > 0 : true))
     .filter((c) => !q || e.convTitle(c).toLowerCase().includes(q) || (e.lastEvent(c.id) && e.describe(e.lastEvent(c.id)!).toLowerCase().includes(q)))
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.lastTs - a.lastTs);
+    .sort((a, b) => b.lastTs - a.lastTs);
 
   const archivedCount = all.filter((c) => c.archived && !isRequest(c) && !hiddenGroup(c)).length;
   const requestCount = all.filter(isRequest).length;
+  const sections: [string, Conversation[]][] =
+    view === 'chats'
+      ? [
+          ['Pinned', list.filter((c) => c.pinned)],
+          ['Recent', list.filter((c) => !c.pinned)],
+        ]
+      : [[view === 'archived' ? 'Archived' : 'Message requests', list]];
+
+  const chip = (f: Exclude<Filter, null>, label: string) => (
+    <button
+      key={f}
+      type="button"
+      onClick={() => setFilter((cur) => (cur === f ? null : f))}
+      aria-pressed={filter === f}
+      className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors ${
+        filter === f ? 'border-accent bg-accent text-white' : 'border-line-strong text-ink-soft hover:bg-subtle'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
-    <div className="flex h-full flex-col bg-white">
-      {/* Profile bar */}
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-line px-3">
-        <Link href="/" className="rounded-md p-1" aria-label="UR Free Here home">
-          <SiteMark className="size-7" />
-        </Link>
-        <button
-          type="button"
-          onClick={() => onDialog('settings')}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-surface"
-          aria-label="Profile and settings"
-        >
-          <Avatar avatar={me.avatar} name={me.name} seed={e.me} size={36} />
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{me.name}</span>
-            <span className="block truncate text-[12px] text-muted">{e.net === 'online' ? 'Online' : e.net === 'connecting' ? 'Connecting…' : 'Offline'}</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onDialog('new-chat')}
-          className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink"
-          aria-label="New chat"
-          title="New chat"
-        >
-          <MessageSquarePlus className="size-5" />
-        </button>
+    <div className="flex h-full flex-col bg-surface">
+      {/* Heading */}
+      <div className="flex h-14 shrink-0 items-center gap-1 px-4">
+        {view !== 'chats' ? (
+          <button type="button" onClick={() => setView('chats')} className="flex min-w-0 flex-1 items-center gap-2 text-[17px] font-bold hover:text-accent">
+            <ArrowLeft className="size-4 shrink-0" />
+            <span className="truncate">{view === 'archived' ? 'Archived' : 'Message requests'}</span>
+          </button>
+        ) : (
+          <h1 className="flex-1 text-[18px] font-bold">Chat</h1>
+        )}
         <Menu
           label="More options"
-          trigger={<EllipsisVertical className="size-5" />}
+          trigger={<EllipsisVertical className="size-[18px]" />}
           items={[
             { label: 'New group', icon: Users, onSelect: () => onDialog('new-group') },
             { label: 'Join a group', icon: KeyRound, onSelect: () => onDialog('join') },
@@ -109,86 +118,78 @@ export function Sidebar({
             { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => onDialog('sign-out') },
           ]}
         />
+        <button type="button" onClick={() => onDialog('new-chat')} className="rounded-md p-2 text-muted hover:bg-subtle hover:text-ink" aria-label="New chat" title="New chat">
+          <SquarePen className="size-[18px]" />
+        </button>
       </div>
 
       {e.net === 'replaced' ? (
-        <div className="flex items-center gap-3 border-b border-warning/20 bg-warning-soft px-4 py-3 text-sm">
+        <div className="mx-3 mb-2 flex items-center gap-3 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-[13px]">
           <span className="flex-1 text-ink-soft">UR Chat is open in another tab.</span>
           <Button size="sm" variant="secondary" onClick={() => e.reclaim()}>
             Use here
           </Button>
         </div>
       ) : e.net === 'offline' ? (
-        <div className="flex items-center gap-2.5 border-b border-line bg-surface px-4 py-2.5 text-[13px] text-muted">
-          <WifiOff className="size-4" />
-          Offline. Messages are saved and will be sent when you reconnect.
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-md bg-subtle px-3 py-2 text-[12.5px] text-muted">
+          <WifiOff className="size-4 shrink-0" />
+          Offline. Messages are saved and sent when you reconnect.
         </div>
       ) : null}
 
-      {/* Search + filters */}
-      <div className="shrink-0 space-y-2 px-3 pb-2 pt-3">
-        {view !== 'chats' ? (
-          <button type="button" onClick={() => setView('chats')} className="flex items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold hover:text-accent">
-            <ArrowLeft className="size-4" />
-            {view === 'archived' ? 'Archived' : 'Message requests'}
-          </button>
-        ) : null}
-        <div className="relative">
+      {/* Search (phones; desktop uses the top bar) + filters */}
+      <div className="shrink-0 space-y-2 px-3 pb-2">
+        <div className="relative md:hidden">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <input
             value={query}
-            onChange={(ev) => setQuery(ev.target.value)}
+            onChange={(ev) => onQuery(ev.target.value)}
             placeholder="Search chats"
             aria-label="Search chats"
-            className="h-9 w-full rounded-lg border border-transparent bg-surface pl-9 pr-8 text-sm placeholder:text-muted focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/20"
+            className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-8 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
           />
           {query && (
-            <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted hover:text-ink" aria-label="Clear search">
+            <button type="button" onClick={() => onQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted hover:text-ink" aria-label="Clear search">
               <X className="size-3.5" />
             </button>
           )}
         </div>
-        {view === 'chats' && (
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-            {(
-              [
-                ['all', 'All'],
-                ['unread', 'Unread'],
-                ['dm', 'Direct'],
-                ['group', 'Groups'],
-              ] as [Filter, string][]
-            ).map(([f, label]) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                aria-pressed={filter === f}
-                className={`shrink-0 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
-                  filter === f ? 'border-accent/30 bg-accent-soft text-accent' : 'border-line text-muted hover:border-line-strong hover:text-ink'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+        {view === 'chats' && <div className="flex gap-1.5 overflow-x-auto pb-0.5">{[chip('unread', 'Unread'), chip('dm', 'Chats'), chip('group', 'Groups')]}</div>}
       </div>
 
       {/* List */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {view === 'chats' && requestCount > 0 && (
+      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        {view === 'chats' && !q && requestCount > 0 && (
           <SpecialRow icon={Inbox} label="Message requests" count={requestCount} onClick={() => setView('requests')} accent />
         )}
-        {view === 'chats' && archivedCount > 0 && !q && <SpecialRow icon={Archive} label="Archived" count={archivedCount} onClick={() => setView('archived')} />}
+        {view === 'chats' && !q && archivedCount > 0 && <SpecialRow icon={Archive} label="Archived" count={archivedCount} onClick={() => setView('archived')} />}
 
         {list.length === 0 ? (
           <EmptyList view={view} searching={!!q} onDialog={onDialog} hasAny={all.length > 0} />
         ) : (
-          <ul>
-            {list.map((c) => (
-              <ConversationRow key={c.id} conv={c} active={c.id === activeId} onOpen={() => onOpen(c.id)} blocked={isBlocked(c)} />
-            ))}
-          </ul>
+          sections
+            .filter(([, items]) => items.length)
+            .map(([title, items]) => (
+              <section key={title} className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((c) => ({ ...c, [title]: !c[title] }))}
+                  className="flex w-full items-center gap-1 px-3 py-1.5 text-[12px] font-semibold text-muted hover:text-ink"
+                  aria-expanded={!collapsed[title]}
+                >
+                  <ChevronDown className={`size-3.5 transition-transform ${collapsed[title] ? '-rotate-90' : ''}`} />
+                  {title === 'Pinned' && <Pin className="size-3" />}
+                  {title}
+                </button>
+                {!collapsed[title] && (
+                  <ul>
+                    {items.map((c) => (
+                      <ConversationRow key={c.id} conv={c} active={c.id === activeId} onOpen={() => onOpen(c.id)} blocked={isBlocked(c)} />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ))
         )}
       </div>
     </div>
@@ -197,12 +198,12 @@ export function Sidebar({
 
 function SpecialRow({ icon: Icon, label, count, onClick, accent }: { icon: typeof Archive; label: string; count: number; onClick: () => void; accent?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface">
-      <span className={`flex size-10 items-center justify-center rounded-full ${accent ? 'bg-accent-soft text-accent' : 'bg-surface text-muted'}`}>
-        <Icon className="size-[18px]" />
+    <button type="button" onClick={onClick} className="mx-2 flex w-[calc(100%-16px)] items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-subtle">
+      <span className={`flex size-8 items-center justify-center rounded-full ${accent ? 'bg-accent-soft text-accent' : 'bg-subtle text-muted'}`}>
+        <Icon className="size-4" />
       </span>
-      <span className="flex-1 text-sm font-medium">{label}</span>
-      <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${accent ? 'bg-accent text-white' : 'bg-surface text-muted'}`}>{count}</span>
+      <span className="flex-1 text-[13px] font-semibold">{label}</span>
+      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${accent ? 'bg-accent text-white' : 'bg-subtle text-muted'}`}>{count}</span>
     </button>
   );
 }
@@ -237,6 +238,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
   const last = e.lastEvent(conv.id);
   const typing = e.typingIn(conv.id);
   const online = conv.type === 'dm' ? e.peerStatus(conv.peerId!) !== 'offline' : undefined;
+  const unread = conv.unread > 0 && !conv.muted;
 
   let preview: React.ReactNode = '';
   if (conv.joining) preview = conv.joining.status === 'rejected' ? 'Request declined' : 'Waiting to be added…';
@@ -244,7 +246,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
   else if (typing.length) preview = <span className="text-accent">typing…</span>;
   else if (last) {
     const mine = last.author === e.me && last.kind !== 'op';
-    const who = conv.type === 'group' && last.kind !== 'op' && !mine ? `${e.nameOf(last.author).split(' ')[0]}: ` : '';
+    const who = conv.type === 'group' && last.kind !== 'op' && !mine ? `${e.nameOf(last.author).split(' ')[0]}: ` : mine ? 'You: ' : '';
     preview = (
       <span className="flex min-w-0 items-center gap-1">
         {mine && <Ticks status={e.deliveryOf(last)} className="shrink-0" />}
@@ -257,33 +259,32 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
   } else preview = conv.type === 'dm' ? 'No messages yet' : '';
 
   return (
-    <li className="group relative">
+    <li className="group relative px-2">
       <button
         type="button"
         onClick={onOpen}
-        className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors sm:px-4 ${active ? 'bg-accent-soft/70' : 'hover:bg-surface'}`}
+        className={`flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors ${active ? 'bg-panel shadow-card' : 'hover:bg-subtle'}`}
         aria-current={active ? 'true' : undefined}
       >
-        <Avatar avatar={e.convImage(conv)} name={title} seed={conv.peerId ?? conv.groupId} size={48} group={conv.type === 'group'} online={online} />
-        <span className="min-w-0 flex-1 border-b border-line/0">
+        <Avatar avatar={e.convImage(conv)} name={title} seed={conv.peerId ?? conv.groupId} size={36} group={conv.type === 'group'} online={online} />
+        <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{title}</span>
-            <span className={`shrink-0 text-[12px] ${conv.unread && !conv.muted ? 'font-semibold text-accent' : 'text-muted'}`}>{last ? shortTime(last.ts) : ''}</span>
+            <span className={`min-w-0 flex-1 truncate text-[14px] ${unread ? 'font-bold' : 'font-medium'}`}>{title}</span>
+            <span className={`shrink-0 text-[11px] ${unread ? 'font-semibold text-ink' : 'text-muted'}`}>{last ? shortTime(last.ts) : ''}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{preview}</span>
+            <span className={`min-w-0 flex-1 truncate text-[12px] ${unread ? 'font-semibold text-ink' : 'text-muted'}`}>{preview}</span>
             {conv.muted && <BellOff className="size-3.5 shrink-0 text-muted" aria-label="Muted" />}
-            {conv.pinned && <Pin className="size-3.5 shrink-0 text-muted" aria-label="Pinned" />}
             {conv.unread > 0 && (
-              <span className={`min-w-5 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold text-white ${conv.muted ? 'bg-slate-400' : 'bg-accent'}`}>
+              <span className={`min-w-5 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white ${conv.muted ? 'bg-muted' : 'bg-danger'}`}>
                 {conv.unread > 99 ? '99+' : conv.unread}
               </span>
             )}
           </span>
         </span>
       </button>
-      <div className="absolute right-2 top-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden">
-        <div className="rounded-md bg-white/90 shadow-card">
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden">
+        <div className="rounded-md border border-line bg-panel shadow-card">
           <Menu
             label={`Options for ${title}`}
             trigger={<EllipsisVertical className="size-4" />}

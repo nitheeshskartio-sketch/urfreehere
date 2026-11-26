@@ -2,6 +2,7 @@ import type { AppDefinition } from '../apps/registry';
 import { SITE } from './config';
 import { Link } from './Link';
 import { SiteMark } from './Logo';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 const SITE_NAV = [
   { label: 'Apps', href: '/#apps' },
@@ -16,7 +17,7 @@ const SITE_NAV = [
 export function SiteHeader({ app }: { app?: AppDefinition }) {
   const nav = app ? app.nav : SITE_NAV;
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur-sm supports-[backdrop-filter]:bg-white/85">
+    <header className="sticky top-0 z-30 border-b border-line bg-panel/95 backdrop-blur-sm supports-[backdrop-filter]:bg-panel/85">
       <div className="page flex h-header items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-md" aria-label={`${SITE.name} home`}>
@@ -48,6 +49,7 @@ export function SiteHeader({ app }: { app?: AppDefinition }) {
               {item.label}
             </Link>
           ))}
+          <ThemeToggle className="ml-1" />
         </nav>
       </div>
     </header>

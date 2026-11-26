@@ -31,7 +31,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-ink/40 sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 sm:items-center sm:p-6"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       role="presentation"
     >
@@ -40,7 +40,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex w-full flex-col bg-white sm:max-h-[min(720px,90dvh)] sm:rounded-xl sm:border sm:border-line sm:shadow-pop ${wide ? 'sm:max-w-[640px]' : 'sm:max-w-[460px]'}`}
+        className={`flex w-full flex-col bg-panel sm:max-h-[min(720px,90dvh)] sm:rounded-xl sm:border sm:border-line sm:shadow-pop ${wide ? 'sm:max-w-[640px]' : 'sm:max-w-[460px]'}`}
       >
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
           {onBack && (
@@ -71,4 +71,4 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 export const inputClass =
-  'w-full rounded-lg border border-line-strong bg-white px-3 py-2.5 text-[15px] placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';
+  'w-full rounded-lg border border-line-strong bg-panel px-3 py-2.5 text-[15px] placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';

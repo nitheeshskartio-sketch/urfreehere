@@ -281,9 +281,9 @@ function SharePanel({ state, hasFiles, onRetry }: { state: SenderState; hasFiles
       <div className="p-4 sm:p-5">
         {phase === 'creating' || !code ? (
           <div className="space-y-3" aria-busy="true">
-            <div className="h-6 w-40 animate-pulse rounded bg-slate-100" />
-            <div className="mx-auto aspect-square w-full max-w-[200px] animate-pulse rounded-lg bg-slate-100" />
-            <div className="h-10 animate-pulse rounded-lg bg-slate-100" />
+            <div className="h-6 w-40 animate-pulse rounded bg-subtle" />
+            <div className="mx-auto aspect-square w-full max-w-[200px] animate-pulse rounded-lg bg-subtle" />
+            <div className="h-10 animate-pulse rounded-lg bg-subtle" />
           </div>
         ) : (
           <>
@@ -295,7 +295,7 @@ function SharePanel({ state, hasFiles, onRetry }: { state: SenderState; hasFiles
               <CopyButton text={formatCode(code)} size="sm" aria-label="Copy code" />
             </div>
 
-            <div className="mt-4 flex justify-center rounded-lg border border-line bg-white p-3">
+            <div className="mt-4 flex justify-center rounded-lg border border-line bg-panel p-3">
               <QRCode value={link} className="aspect-square w-full max-w-[184px] sm:max-w-[200px]" />
             </div>
 

@@ -16,7 +16,7 @@ export function InfoPanel({ conv, onClose, onInvite, onOpenChat }: { conv: Conve
   const e = useEngine();
   const isGroup = conv.type === 'group';
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full flex-col bg-panel">
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-line px-3">
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Close info">
           <X className="size-5" />
@@ -383,7 +383,7 @@ function SharedMedia({ events }: { events: StoredEvent[] }) {
 function MediaThumb({ body }: { body: FileBody }) {
   const url = useFileUrl(body.fileId);
   return (
-    <a href={url ?? undefined} download={sanitizeName(body.name)} className="block aspect-square overflow-hidden rounded-md bg-slate-100" aria-label={`Download ${sanitizeName(body.name)}`}>
+    <a href={url ?? undefined} download={sanitizeName(body.name)} className="block aspect-square overflow-hidden rounded-md bg-subtle" aria-label={`Download ${sanitizeName(body.name)}`}>
       {url ? <img src={url} alt="" className="size-full object-cover" /> : body.thumb ? <img src={body.thumb} alt="" className="size-full object-cover blur-sm" /> : null}
     </a>
   );

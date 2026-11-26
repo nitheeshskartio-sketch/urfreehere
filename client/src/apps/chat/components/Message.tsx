@@ -1,4 +1,4 @@
-import { ChevronDown, Copy, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import { Copy, EllipsisVertical, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, X } from 'lucide-react';
 import { formatBytes } from '../../../lib/format';
 import { useEngine, useFileUrl } from '../hooks';
 import { formatCoord, mapsLink } from '../lib/geo';
@@ -13,7 +13,7 @@ import { Ticks } from './Ticks';
 export function Message({
   event,
   showSender,
-  isGroup,
+  isGroup: _isGroup,
   onReply,
   onOpenImage,
   onJump,
@@ -38,83 +38,92 @@ export function Message({
     void navigator.clipboard?.writeText(value).then(() => e.toast('Copied', 'success'), () => e.toast("Couldn't copy", 'error'));
   };
 
-  const actions = (
-    <Menu
-      label="Message options"
-      align={mine ? 'right' : 'left'}
-      trigger={<ChevronDown className="size-4" />}
-      items={[
-        { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
-        { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' },
-        {
-          label: 'Delete for me',
-          icon: Trash2,
-          danger: true,
-          onSelect: () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]),
-        },
-      ]}
-    />
-  );
+  const media = event.kind === 'image' || event.kind === 'location';
+  const fullTime = new Date(event.ts).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className={`group flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-2.5' : 'mt-0.5'}`} id={`m-${event.id}`}>
-      {isGroup && !mine && (
-        <span className="w-8 shrink-0">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} />}</span>
+    <div className={`group flex gap-2.5 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-4' : 'mt-0.5'}`} id={`m-${event.id}`}>
+      {!mine && (
+        <span className="w-8 shrink-0 pt-[22px]">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} />}</span>
       )}
-      <div className={`flex max-w-[min(78%,560px)] items-start gap-1 ${mine ? 'flex-row-reverse' : ''}`}>
-        <div
-          className={`relative min-w-0 ${
-            bigEmoji
-              ? ''
-              : `rounded-2xl border px-3 py-2 shadow-card ${mine ? 'rounded-br-md border-accent/15 bg-[#E7F0FF]' : 'rounded-bl-md border-line bg-white'}`
-          } ${event.kind === 'image' || event.kind === 'location' ? '!p-1' : ''}`}
-        >
-          {isGroup && !mine && showSender && (
-            <p className={`mb-0.5 truncate text-[12.5px] font-semibold ${event.kind === 'image' || event.kind === 'location' ? 'px-2 pt-1' : ''}`} style={{ color: senderColor(event.author) }}>
-              {e.nameOf(event.author)}
-            </p>
-          )}
-          {event.replyTo && (
-            <button
-              type="button"
-              onClick={() => replied && onJump(replied.id)}
-              className={`mb-1.5 block w-full rounded-lg border-l-[3px] border-accent bg-ink/[0.04] px-2.5 py-1.5 text-left ${event.kind === 'image' || event.kind === 'location' ? 'm-1 w-[calc(100%-8px)]' : ''}`}
+      <div className={`flex min-w-0 max-w-[min(82%,640px)] flex-col ${mine ? 'items-end' : 'items-start'}`}>
+        {showSender && (
+          <p className="mb-1 flex items-baseline gap-2 px-0.5 text-[12px] text-muted">
+            {!mine && <span className="font-semibold text-ink-soft">{e.nameOf(event.author)}</span>}
+            <span>{clockTime(event.ts)}</span>
+          </p>
+        )}
+        <div className={`flex items-end gap-1 ${mine ? 'flex-row' : 'flex-row-reverse'}`}>
+          <div className="relative min-w-0" title={fullTime}>
+            <div
+              className={`min-w-0 ${
+                bigEmoji ? '' : `rounded-md ${media ? 'p-1' : 'px-3 py-2'} ${mine ? 'bg-bubble-own' : 'bg-panel shadow-card'}`
+              }`}
             >
-              <span className="block text-[12px] font-semibold text-accent">{replied ? e.nameOf(replied.author) : 'Message'}</span>
-              <span className="line-clamp-2 text-[13px] text-muted">{replied ? e.describe(replied) : 'Original message not available'}</span>
-            </button>
-          )}
-
-          {event.kind === 'text' &&
-            (bigEmoji ? (
-              <p className="text-4xl leading-tight">{text}</p>
-            ) : (
-              <p className="whitespace-pre-wrap break-words text-[14.5px] leading-relaxed [overflow-wrap:anywhere]">{linkify(text)}</p>
-            ))}
-          {event.kind === 'image' && <ImageContent body={body as unknown as FileBody} onOpen={onOpenImage} />}
-          {event.kind === 'file' && <FileContent body={body as unknown as FileBody} />}
-          {event.kind === 'location' && (
-            <div className="p-1">
-              <LocationContent body={body as unknown as LocationBody} />
+              {event.replyTo && (
+                <button
+                  type="button"
+                  onClick={() => replied && onJump(replied.id)}
+                  className={`mb-1.5 block w-full rounded border-l-[3px] border-accent bg-ink/[0.05] px-2.5 py-1.5 text-left ${media ? 'm-1 w-[calc(100%-8px)]' : ''}`}
+                >
+                  <span className="block text-[12px] font-semibold text-ink-soft">{replied ? e.nameOf(replied.author) : 'Message'}</span>
+                  <span className="line-clamp-2 text-[13px] text-muted">{replied ? e.describe(replied) : 'Original message not available'}</span>
+                </button>
+              )}
+              {event.kind === 'text' &&
+                (bigEmoji ? (
+                  <p className="text-4xl leading-tight">{text}</p>
+                ) : (
+                  <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.45] [overflow-wrap:anywhere]">{linkify(text)}</p>
+                ))}
+              {event.kind === 'image' && <ImageContent body={body as unknown as FileBody} onOpen={onOpenImage} />}
+              {event.kind === 'file' && <FileContent body={body as unknown as FileBody} />}
+              {event.kind === 'location' && <LocationContent body={body as unknown as LocationBody} />}
             </div>
-          )}
-
-          <span className={`flex items-center justify-end gap-1 text-[11px] text-muted ${event.kind === 'image' || event.kind === 'location' ? 'px-2 pb-1' : '-mb-0.5 mt-0.5'} ${bigEmoji ? 'rounded bg-white/80 px-1' : ''}`}>
-            {clockTime(event.ts)}
-            {mine && <Ticks status={e.deliveryOf(event)} />}
-          </span>
+            {/* Hover action bar, like Teams */}
+            <div
+              className={`absolute -top-4 z-10 flex items-center rounded-md border border-line bg-panel shadow-card opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden ${
+                mine ? 'right-1' : 'left-auto right-1'
+              }`}
+            >
+              <button type="button" onClick={() => onReply(event)} className="p-1.5 text-muted hover:text-accent" aria-label="Reply" title="Reply">
+                <Reply className="size-4" />
+              </button>
+              <Menu
+                label="Message options"
+                align="right"
+                trigger={<EllipsisVertical className="size-4" />}
+                items={[
+                  { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
+                  { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' },
+                  {
+                    label: 'Delete for me',
+                    icon: Trash2,
+                    danger: true,
+                    onSelect: () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]),
+                  },
+                ]}
+              />
+            </div>
+          </div>
+          {mine && <Ticks status={e.deliveryOf(event)} className="mb-0.5 shrink-0" />}
+          {/* Touch devices: actions via the same menu, without hover */}
+          <div className="hidden [@media(pointer:coarse)]:block">
+            <Menu
+              label="Message options"
+              align={mine ? 'right' : 'left'}
+              trigger={<EllipsisVertical className="size-4" />}
+              items={[
+                { label: 'Reply', icon: Reply, onSelect: () => onReply(event) },
+                { label: 'Copy', icon: Copy, onSelect: copy, hidden: event.kind === 'image' },
+                { label: 'Delete for me', icon: Trash2, danger: true, onSelect: () => window.confirm('Delete this message from this device?') && void e.deleteLocal([event.id]) },
+              ]}
+            />
+          </div>
         </div>
-        <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100">{actions}</div>
       </div>
     </div>
   );
-}
-
-const SENDER_COLORS = ['#2563EB', '#16A34A', '#D97706', '#DB2777', '#7C3AED', '#0D9488', '#E11D48', '#4F46E5'];
-function senderColor(id: string) {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return SENDER_COLORS[h % SENDER_COLORS.length];
 }
 
 function TransferStatus({ fileId, size }: { fileId: string; size: number }) {
@@ -154,7 +163,7 @@ function ImageContent({ body, onOpen }: { body: FileBody; onOpen: (fileId: strin
       <button
         type="button"
         onClick={() => url && onOpen(body.fileId)}
-        className="relative block w-[280px] max-w-full overflow-hidden rounded-xl bg-slate-100"
+        className="relative block w-[280px] max-w-full overflow-hidden rounded-xl bg-subtle"
         style={{ aspectRatio: `1 / ${ratio}` }}
         aria-label={url ? 'Open photo' : 'Photo loading'}
       >
@@ -186,7 +195,7 @@ function FileContent({ body }: { body: FileBody }) {
   return (
     <div className="w-[300px] max-w-full">
       <div className="flex items-center gap-3 rounded-lg bg-ink/[0.04] p-2.5">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white text-accent shadow-card">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-panel text-accent shadow-card">
           <FileText className="size-5" />
         </span>
         <span className="min-w-0 flex-1">
@@ -201,7 +210,7 @@ function FileContent({ body }: { body: FileBody }) {
           <a
             href={url}
             download={name}
-            className="rounded-md p-2 text-muted hover:bg-white hover:text-ink"
+            className="rounded-md p-2 text-muted hover:bg-panel hover:text-ink"
             aria-label={`Download ${name}`}
             onClick={() => e.toast(`Saving ${name}`, 'info')}
           >
@@ -248,8 +257,8 @@ function LocationContent({ body }: { body: LocationBody }) {
 
 export function SystemMessage({ text }: { text: string }) {
   return (
-    <div className="my-2 flex justify-center">
-      <span className="max-w-[85%] rounded-lg bg-white/90 px-3 py-1 text-center text-[12.5px] text-muted shadow-card">{text}</span>
+    <div className="my-3 flex justify-center">
+      <span className="max-w-[85%] text-center text-[12px] text-muted">{text}</span>
     </div>
   );
 }

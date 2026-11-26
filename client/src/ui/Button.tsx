@@ -8,9 +8,9 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary: 'bg-accent text-white hover:bg-accent-hover active:bg-accent-hover',
-  secondary: 'border border-line bg-white text-ink hover:border-line-strong hover:bg-surface',
+  secondary: 'border border-line bg-panel text-ink hover:border-line-strong hover:bg-surface',
   ghost: 'text-muted hover:bg-surface hover:text-ink',
-  danger: 'border border-line bg-white text-danger hover:border-danger/30 hover:bg-danger-soft',
+  danger: 'border border-line bg-panel text-danger hover:border-danger/30 hover:bg-danger-soft',
 };
 
 const sizes: Record<Size, string> = {

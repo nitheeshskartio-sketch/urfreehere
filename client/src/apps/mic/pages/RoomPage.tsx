@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { navigate } from '../../../lib/router';
 import { Link } from '../../../site/Link';
 import { Button } from '../../../ui/Button';
+import { ThemeToggle } from '../../../ui/ThemeToggle';
 import { Field, inputClass } from '../../../ui/Modal';
 import { MicIcon } from '../../registry';
 import { ProfileFields } from '../components/ProfileFields';
@@ -15,11 +16,12 @@ import { ERROR_COPY, MicError, fetchConfig, fetchRoom, normalizeRoomCode, type M
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-surface">
-      <header className="flex h-14 items-center border-b border-line bg-white px-4 sm:px-6">
+      <header className="flex h-14 items-center justify-between border-b border-line bg-panel px-4 sm:px-6">
         <Link href="/mic" className="flex items-center gap-2.5 rounded-md">
           <MicIcon className="size-7" />
           <span className="text-[15px] font-semibold tracking-tight">Mic</span>
         </Link>
+        <ThemeToggle />
       </header>
       <main className="flex flex-1 items-start justify-center px-4 py-8 sm:items-center sm:py-12">{children}</main>
     </div>
@@ -30,7 +32,7 @@ function Screen({ icon: Icon, tone, title, message, children }: { icon: typeof M
   const ring = { error: 'bg-danger-soft text-danger', neutral: 'bg-surface text-muted', warning: 'bg-warning-soft text-warning' }[tone];
   return (
     <Shell>
-      <div className="w-full max-w-sm rounded-xl border border-line bg-white p-6 text-center shadow-card">
+      <div className="w-full max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card">
         <span className={`mx-auto flex size-12 items-center justify-center rounded-full ${ring}`}>
           <Icon className="size-6" />
         </span>
@@ -190,7 +192,7 @@ export default function RoomPage({ code: rawCode }: { code: string }) {
 
   return (
     <Shell>
-      <form onSubmit={join} className="w-full max-w-[460px] overflow-hidden rounded-xl border border-line bg-white shadow-card" noValidate>
+      <form onSubmit={join} className="w-full max-w-[460px] overflow-hidden rounded-xl border border-line bg-panel shadow-card" noValidate>
         <div className="border-b border-line px-5 py-5 sm:px-6">
           <p className="text-[13px] font-medium text-mic">{isCreator ? 'Your room' : "You're invited to"}</p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight">{preview.name}</h1>

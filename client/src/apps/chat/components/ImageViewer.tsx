@@ -36,23 +36,23 @@ export function ImageViewer({
           {index + 1} / {fileIds.length}
         </span>
         {url && (
-          <a href={url} download={title(fileId)} className="rounded-md p-2 hover:bg-white/10" aria-label="Download photo">
+          <a href={url} download={title(fileId)} className="rounded-md p-2 hover:bg-panel/10" aria-label="Download photo">
             <Download className="size-5" />
           </a>
         )}
-        <button type="button" onClick={onClose} className="rounded-md p-2 hover:bg-white/10" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-md p-2 hover:bg-panel/10" aria-label="Close">
           <X className="size-5" />
         </button>
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center p-2 sm:p-6" onClick={(e) => e.target === e.currentTarget && onClose()}>
         {url && <img src={url} alt="" className="max-h-full max-w-full select-none object-contain" />}
         {index > 0 && (
-          <button type="button" onClick={() => onIndex(index - 1)} className="absolute left-2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" aria-label="Previous photo">
+          <button type="button" onClick={() => onIndex(index - 1)} className="absolute left-2 rounded-full bg-panel/10 p-2 text-white hover:bg-panel/20" aria-label="Previous photo">
             <ChevronLeft className="size-6" />
           </button>
         )}
         {index < fileIds.length - 1 && (
-          <button type="button" onClick={() => onIndex(index + 1)} className="absolute right-2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" aria-label="Next photo">
+          <button type="button" onClick={() => onIndex(index + 1)} className="absolute right-2 rounded-full bg-panel/10 p-2 text-white hover:bg-panel/20" aria-label="Next photo">
             <ChevronRight className="size-6" />
           </button>
         )}

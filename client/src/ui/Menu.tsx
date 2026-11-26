@@ -60,7 +60,7 @@ export function Menu({
       {open && (
         <div
           role="menu"
-          className={`absolute z-40 min-w-[200px] ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-lg border border-line bg-white py-1 shadow-pop ${align === 'right' ? 'right-0' : 'left-0'}`}
+          className={`absolute z-40 min-w-[200px] ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-lg border border-line bg-panel py-1 shadow-pop ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           {items
             .filter((i) => !i.hidden)

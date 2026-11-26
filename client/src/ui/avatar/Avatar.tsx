@@ -28,7 +28,7 @@ export function Avatar({
     inner = <AvatarArt refId={avatar} />;
   } else if (group && !name) {
     inner = (
-      <span className="flex size-full items-center justify-center bg-slate-200 text-muted">
+      <span className="flex size-full items-center justify-center bg-subtle text-muted">
         <Users style={{ width: size * 0.45, height: size * 0.45 }} />
       </span>
     );
@@ -47,7 +47,7 @@ export function Avatar({
       <span className="block size-full overflow-hidden rounded-full bg-surface">{inner}</span>
       {online !== undefined && (
         <span
-          className={`absolute bottom-0 right-0 rounded-full border-2 border-white ${online ? 'bg-success' : 'bg-slate-300'}`}
+          className={`absolute bottom-0 right-0 rounded-full border-2 border-panel ${online ? 'bg-success' : 'bg-line-strong'}`}
           style={{ width: Math.max(10, size * 0.28), height: Math.max(10, size * 0.28) }}
           aria-label={online ? 'Online' : 'Offline'}
         />

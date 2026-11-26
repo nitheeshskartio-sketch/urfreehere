@@ -132,7 +132,7 @@ export function ChatView({
 
   return (
     <div
-      className="relative flex h-full min-w-0 flex-col bg-[#F4F6FA]"
+      className="relative flex h-full min-w-0 flex-col bg-canvas"
       onDragOver={(ev) => {
         if (canPost && ev.dataTransfer.types.includes('Files')) {
           ev.preventDefault();
@@ -143,7 +143,7 @@ export function ChatView({
       onDrop={onDrop}
     >
       {/* Header */}
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-white px-2 sm:px-4">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-canvas px-2 sm:px-4">
         {showBack && (
           <button type="button" onClick={onBack} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Back to chats">
             <ArrowLeft className="size-5" />
@@ -199,7 +199,7 @@ export function ChatView({
 
       {/* Banners */}
       {contact?.state === 'request' && (
-        <div className="flex flex-col gap-3 border-b border-line bg-white px-4 py-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 border-b border-line bg-panel px-4 py-3 sm:flex-row sm:items-center">
           <p className="flex-1 text-sm text-ink-soft">
             <span className="font-semibold">{title}</span> isn't in your contacts. Read receipts are off and files won't download until you accept.
           </p>
@@ -214,7 +214,7 @@ export function ChatView({
         </div>
       )}
       {contact?.state === 'blocked' && (
-        <div className="flex items-center gap-3 border-b border-line bg-white px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-line bg-panel px-4 py-3">
           <p className="flex-1 text-sm text-ink-soft">You blocked this contact.</p>
           <Button variant="secondary" size="sm" onClick={() => e.unblockUser(conv.peerId!)}>
             Unblock
@@ -222,7 +222,7 @@ export function ChatView({
         </div>
       )}
       {conv.joining && (
-        <div className="flex items-start gap-3 border-b border-line bg-white px-4 py-3">
+        <div className="flex items-start gap-3 border-b border-line bg-panel px-4 py-3">
           {conv.joining.status === 'pending' ? <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-accent" /> : <Ban className="mt-0.5 size-4 shrink-0 text-danger" />}
           <p className="text-sm text-ink-soft">
             {conv.joining.status === 'pending'
@@ -235,7 +235,7 @@ export function ChatView({
       {/* Messages */}
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-6">
         {events.length === 0 && !conv.joining && (
-          <div className="mx-auto mt-10 max-w-sm rounded-xl bg-white/80 px-5 py-4 text-center text-sm text-muted shadow-card">
+          <div className="mx-auto mt-10 max-w-sm rounded-xl bg-panel/80 px-5 py-4 text-center text-sm text-muted shadow-card">
             {isGroup ? 'No messages yet. Say hello to the group.' : `No messages yet. Messages to ${title} are delivered directly when you're both online.`}
           </div>
         )}
@@ -249,7 +249,7 @@ export function ChatView({
             const el = scroller.current!;
             el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
           }}
-          className="absolute bottom-24 right-4 flex size-10 items-center justify-center rounded-full border border-line bg-white text-muted shadow-pop hover:text-ink"
+          className="absolute bottom-24 right-4 flex size-10 items-center justify-center rounded-full border border-line bg-panel text-muted shadow-pop hover:text-ink"
           aria-label="Jump to latest message"
         >
           <ArrowDown className="size-5" />
@@ -257,7 +257,7 @@ export function ChatView({
       )}
 
       {waiting && e.peerStatus(conv.peerId!) === 'offline' && (
-        <p className="shrink-0 border-t border-line bg-white px-4 py-1.5 text-center text-[12px] text-muted">
+        <p className="shrink-0 border-t border-line bg-panel px-4 py-1.5 text-center text-[12px] text-muted">
           {title} is offline. Waiting messages are delivered automatically when you're both online.
         </p>
       )}
@@ -265,7 +265,7 @@ export function ChatView({
       {canPost ? (
         <Composer convId={conv.id} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
       ) : (
-        <div className="shrink-0 border-t border-line bg-white px-4 py-4 text-center text-sm text-muted">
+        <div className="shrink-0 border-t border-line bg-panel px-4 py-4 text-center text-sm text-muted">
           {conv.joining
             ? 'You can send messages once you have been added.'
             : group?.deleted
@@ -278,7 +278,7 @@ export function ChatView({
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-accent-soft/80">
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-accent bg-white px-8 py-6 text-accent">
+          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-accent bg-panel px-8 py-6 text-accent">
             <Upload className="size-7" />
             <p className="text-sm font-semibold">Drop to send</p>
           </div>
@@ -321,8 +321,10 @@ function MessageList({
       lastDay = day;
       prev = null;
       out.push(
-        <div key={`d-${day}`} className="my-3 flex justify-center">
-          <span className="rounded-md bg-white px-2.5 py-1 text-[12px] font-medium text-muted shadow-card">{dayLabel(ev.ts)}</span>
+        <div key={`d-${day}`} className="my-4 flex items-center gap-3 text-[12px] text-muted">
+          <span className="h-px flex-1 bg-line" />
+          {dayLabel(ev.ts)}
+          <span className="h-px flex-1 bg-line" />
         </div>,
       );
     }

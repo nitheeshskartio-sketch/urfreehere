@@ -75,9 +75,9 @@ export default function QrScanner({ onCode, onClose }: { onCode: (code: string) 
           <p className="mt-3 max-w-xs text-sm text-muted">{error}</p>
         </div>
       ) : (
-        <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-lg bg-ink">
+        <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-lg bg-black">
           <video ref={videoRef} className="size-full object-cover" playsInline muted />
-          <div className="pointer-events-none absolute inset-[15%] rounded-lg border-2 border-white/80" />
+          <div className="pointer-events-none absolute inset-[15%] rounded-lg border-2 border-panel/80" />
         </div>
       )}
       <p className="text-center text-sm text-muted">{hint ?? 'Point the camera at the QR code on the sending device.'}</p>

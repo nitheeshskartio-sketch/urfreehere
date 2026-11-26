@@ -9,7 +9,7 @@ export function ShareCard({ link, code, codeLabel, qrName, shareTitle }: { link:
   const canShare = typeof navigator.share === 'function';
   return (
     <div className="space-y-4">
-      <div className="flex justify-center rounded-lg border border-line bg-white p-3">
+      <div className="flex justify-center rounded-lg border border-line bg-panel p-3">
         <QRCode value={link} className="aspect-square w-full max-w-[200px]" />
       </div>
       {code && (

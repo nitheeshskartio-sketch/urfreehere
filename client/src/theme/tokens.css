@@ -1,55 +1,109 @@
 /*
- * UR Free Here — universal design tokens.
+ * UR Free Here — universal design tokens, styled after Microsoft Teams (Fluent 2).
  *
- * Every app on the site uses these through Tailwind (see tailwind.config.js),
- * so changing a value here restyles the whole site consistently. Colours are
- * stored as space-separated RGB channels so Tailwind opacity modifiers work
+ * Light is the default; `html[data-theme="dark"]` switches every app to the dark
+ * palette. Colours are RGB channels so Tailwind opacity modifiers work
  * (e.g. `bg-accent/10`).
  */
 :root {
+  color-scheme: light;
+
   /* Surfaces */
-  --c-bg: 255 255 255;
-  --c-surface: 248 250 252;
+  --c-bg: 255 255 255; /* cards, panels, dialogs */
+  --c-surface: 245 245 245; /* page background, list panels */
+  --c-canvas: 245 245 245; /* conversation / room background */
+  --c-subtle: 240 240 240; /* hover, skeletons, chips */
+  --c-rail: 235 235 235; /* app rail and title bar */
+  --c-rail-fg: 97 97 97;
 
   /* Text */
-  --c-ink: 23 32 51;
-  --c-ink-soft: 51 65 85;
-  --c-muted: 100 116 139;
+  --c-ink: 36 36 36;
+  --c-ink-soft: 66 66 66;
+  --c-muted: 97 97 97;
 
   /* Lines */
-  --c-line: 229 231 235;
-  --c-line-strong: 209 213 219;
+  --c-line: 224 224 224;
+  --c-line-strong: 209 209 209;
 
-  /* Brand accent */
-  --c-accent: 37 99 235;
-  --c-accent-hover: 29 78 216;
-  --c-accent-soft: 239 246 255;
+  /* Brand (Teams indigo) */
+  --c-accent: 91 95 199; /* buttons and fills */
+  --c-accent-hover: 79 82 178;
+  --c-accent-text: 91 95 199; /* links and accent text */
+  --c-accent-soft: 232 235 250;
+  --c-bubble-own: 232 235 250; /* my chat messages */
+
+  /* Status: saturated fills, readable text variants */
+  --c-success: 19 161 14;
+  --c-success-text: 16 124 16;
+  --c-success-soft: 241 250 241;
+  --c-danger: 196 49 75;
+  --c-danger-text: 196 49 75;
+  --c-danger-soft: 253 243 244;
+  --c-warning: 234 163 0;
+  --c-warning-text: 131 91 0;
+  --c-warning-soft: 255 249 230;
+
+  /* Inverted surfaces (toasts, active toggles) */
+  --c-inverse: 36 36 36;
+  --c-on-inverse: 255 255 255;
 
   /* App brand colours (icons) */
   --c-mic: 124 58 237;
 
-  /* Status */
-  --c-success: 22 163 74;
-  --c-success-soft: 240 253 244;
-  --c-danger: 220 38 38;
-  --c-danger-soft: 254 242 242;
-  --c-warning: 180 83 9;
-  --c-warning-soft: 255 251 235;
-
   /* Shape & depth */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04);
-  --shadow-pop: 0 4px 12px -2px rgb(16 24 40 / 0.08), 0 1px 3px rgb(16 24 40 / 0.05);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.08), 0 0 1px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 8px 16px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
 
-  /* Type */
-  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Type: Segoe UI where available (Windows, like Teams), Inter elsewhere */
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Layout */
   --content-max: 1080px;
   --header-h: 56px;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --c-bg: 41 41 41;
+  --c-surface: 31 31 31;
+  --c-canvas: 31 31 31;
+  --c-subtle: 51 51 51;
+  --c-rail: 10 10 10;
+  --c-rail-fg: 173 173 173;
+
+  --c-ink: 245 245 245;
+  --c-ink-soft: 214 214 214;
+  --c-muted: 173 173 173;
+
+  --c-line: 61 61 61;
+  --c-line-strong: 82 82 82;
+
+  --c-accent: 91 95 199;
+  --c-accent-hover: 107 111 214;
+  --c-accent-text: 127 133 245;
+  --c-accent-soft: 43 43 64;
+  --c-bubble-own: 43 43 64;
+
+  --c-success: 19 161 14;
+  --c-success-text: 92 199 82;
+  --c-success-soft: 21 42 21;
+  --c-danger: 196 49 75;
+  --c-danger-text: 241 112 123;
+  --c-danger-soft: 62 31 37;
+  --c-warning: 234 163 0;
+  --c-warning-text: 242 198 97;
+  --c-warning-soft: 61 48 10;
+
+  --c-inverse: 245 245 245;
+  --c-on-inverse: 36 36 36;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 1px rgb(0 0 0 / 0.5);
+  --shadow-pop: 0 8px 16px rgb(0 0 0 / 0.5), 0 0 2px rgb(0 0 0 / 0.5);
 }
 
 @media (min-width: 640px) {

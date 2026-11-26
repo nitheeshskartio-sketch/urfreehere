@@ -39,7 +39,7 @@ export function ParticipantCard({ p, size }: { p: Participant; size: CardSize })
 
   return (
     <div
-      className={`relative flex flex-col items-center justify-center rounded-2xl border bg-white px-3 py-4 text-center shadow-card transition-[border-color,box-shadow] duration-200 ${minH} ${
+      className={`relative flex flex-col items-center justify-center rounded-2xl border bg-panel px-3 py-4 text-center shadow-card transition-[border-color,box-shadow] duration-200 ${minH} ${
         speaking ? 'border-success ring-2 ring-success/30' : 'border-line'
       }`}
       aria-label={`${p.name}${p.self ? ' (you)' : ''}: ${LABEL[status]}`}

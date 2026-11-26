@@ -86,7 +86,7 @@ export function Dropzone({
       {...zoneEvents}
       className={`flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-10 text-center transition-colors sm:py-12 ${tone} ${className}`}
     >
-      <span className="flex size-11 items-center justify-center rounded-lg border border-line bg-white text-muted shadow-card">
+      <span className="flex size-11 items-center justify-center rounded-lg border border-line bg-panel text-muted shadow-card">
         <Upload className="size-5" strokeWidth={1.75} />
       </span>
       <p className="mt-4 text-[15px] font-medium">

@@ -21,6 +21,7 @@ import { Button } from '../../../ui/Button';
 import { Menu } from '../../../ui/Menu';
 import { Field, Modal, inputClass } from '../../../ui/Modal';
 import { ShareCard } from '../../../ui/ShareCard';
+import { ThemeToggle } from '../../../ui/ThemeToggle';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { MicIcon } from '../../registry';
 import { useRoom } from '../hooks';
@@ -59,7 +60,7 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
   return (
     <div className="flex h-[100dvh] flex-col bg-surface">
       {/* Header */}
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-white px-3 sm:px-5">
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-panel px-3 sm:px-5">
         <MicIcon className="size-8 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -103,6 +104,7 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
         <button type="button" onClick={() => setSettings('room')} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Room settings" title="Room settings">
           <Settings2 className="size-5" />
         </button>
+        <ThemeToggle />
       </header>
 
       {!c.socketOnline && (
@@ -118,7 +120,7 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
             ))}
           </div>
           {people.length === 1 && (
-            <div className="mx-auto mt-6 max-w-sm rounded-xl border border-line bg-white px-5 py-4 text-center text-sm text-muted shadow-card">
+            <div className="mx-auto mt-6 max-w-sm rounded-xl border border-line bg-panel px-5 py-4 text-center text-sm text-muted shadow-card">
               You're the only one here.{' '}
               <button type="button" onClick={() => setInvite(true)} className="font-medium text-accent hover:underline">
                 Invite people
@@ -128,14 +130,14 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
         </main>
 
         {panel && (
-          <aside className="fixed inset-0 z-30 flex justify-end bg-ink/30 md:static md:z-auto md:bg-transparent" onMouseDown={(e) => e.target === e.currentTarget && setPanel(false)}>
+          <aside className="fixed inset-0 z-30 flex justify-end bg-black/30 md:static md:z-auto md:bg-transparent" onMouseDown={(e) => e.target === e.currentTarget && setPanel(false)}>
             <ParticipantsPanel client={client} onClose={() => setPanel(false)} />
           </aside>
         )}
       </div>
 
       {/* Microphone controls */}
-      <footer className="shrink-0 border-t border-line bg-white px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+      <footer className="shrink-0 border-t border-line bg-panel px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
         {c.mic.error && (
           <div className="mx-auto mb-3 flex max-w-xl items-start gap-3 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-[13px] text-ink-soft">
             <MicOff className="mt-0.5 size-4 shrink-0 text-danger" />
@@ -164,7 +166,7 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
               type="button"
               onClick={() => void c.toggleMute()}
               className={`flex size-14 items-center justify-center rounded-full transition-colors ${
-                c.mic.muted ? 'bg-danger-soft text-danger hover:bg-danger/15' : 'bg-ink text-white hover:bg-ink-soft'
+                c.mic.muted ? 'bg-danger-soft text-danger hover:bg-danger/15' : 'bg-inverse text-on-inverse hover:bg-inverse/85'
               }`}
               aria-label={c.mic.muted ? 'Unmute microphone' : 'Mute microphone'}
               aria-pressed={!c.mic.muted}
@@ -197,7 +199,7 @@ function ParticipantsPanel({ client, onClose }: { client: RoomClient; onClose: (
   const c = useRoom(client);
   const people = [...c.participants.values()].sort((a, b) => Number(b.isHost) - Number(a.isHost) || a.joinedAt - b.joinedAt);
   return (
-    <div className="flex h-full w-full max-w-[360px] flex-col border-l border-line bg-white shadow-pop md:shadow-none">
+    <div className="flex h-full w-full max-w-[360px] flex-col border-l border-line bg-panel shadow-pop md:shadow-none">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
         <h2 className="text-[15px] font-semibold">
           Participants <span className="font-normal text-muted tabular">{people.length}</span>
@@ -229,7 +231,7 @@ function ParticipantRow({ p, client }: { p: Participant; client: RoomClient }) {
   const status = statusOf(p);
   return (
     <li className="flex items-center gap-3 px-4 py-2.5">
-      <span className={`rounded-full ${status === 'SPEAKING' ? 'ring-2 ring-success ring-offset-2' : ''}`}>
+      <span className={`rounded-full ${status === 'SPEAKING' ? 'ring-2 ring-success ring-offset-2 ring-offset-panel' : ''}`}>
         <Avatar avatar={p.avatar} name={p.name} seed={p.pid} size={36} />
       </span>
       <span className="min-w-0 flex-1">
@@ -454,7 +456,7 @@ function Toasts({ client }: { client: RoomClient }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-20 z-[70] flex flex-col items-center gap-2 px-4" aria-live="polite">
       {c.toasts.map((t) => (
-        <div key={t.id} className={`rounded-lg px-3.5 py-2 text-sm shadow-pop ${t.tone === 'error' ? 'bg-danger text-white' : 'bg-ink text-white'}`}>
+        <div key={t.id} className={`rounded-lg px-3.5 py-2 text-sm shadow-pop ${t.tone === 'error' ? 'bg-danger text-white' : 'bg-inverse text-on-inverse'}`}>
           {t.text}
         </div>
       ))}

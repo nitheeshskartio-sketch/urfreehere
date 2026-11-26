@@ -92,7 +92,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="mt-8 rounded-xl border border-line bg-white p-5 shadow-card sm:p-6">
+          <div className="mt-8 rounded-xl border border-line bg-panel p-5 shadow-card sm:p-6">
             <div className="flex items-start gap-3.5">
               <ChatIcon className="size-10 shrink-0" />
               <div className="min-w-0">
@@ -153,7 +153,7 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 function Principle({ icon: Icon, title, text }: { icon: typeof Gift; title: string; text: string }) {
   return (
     <li className="flex gap-3.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-ink-soft">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-panel text-ink-soft">
         <Icon className="size-[18px]" strokeWidth={1.75} />
       </span>
       <div>
@@ -167,7 +167,7 @@ function Principle({ icon: Icon, title, text }: { icon: typeof Gift; title: stri
 function AppCard({ app, featured }: { app: AppDefinition; featured: boolean }) {
   return (
     <article
-      className={`overflow-hidden rounded-xl border border-line bg-white shadow-card ${
+      className={`overflow-hidden rounded-xl border border-line bg-panel shadow-card ${
         featured ? 'grid lg:grid-cols-[1.15fr_1fr]' : 'flex flex-col'
       }`}
     >
@@ -207,7 +207,7 @@ function AppCard({ app, featured }: { app: AppDefinition; featured: boolean }) {
           <ol className="mt-4 space-y-4">
             {app.steps.map((step, i) => (
               <li key={step} className="flex gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-[13px] font-semibold tabular text-ink-soft">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-line bg-panel text-[13px] font-semibold tabular text-ink-soft">
                   {i + 1}
                 </span>
                 <p className="pt-0.5 text-sm leading-relaxed text-ink-soft">{step}</p>

@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from '../../../site/Link';
 import { SiteMark } from '../../../site/Logo';
 import { Button } from '../../../ui/Button';
+import { ThemeToggle } from '../../../ui/ThemeToggle';
 import { navigate } from '../../../lib/router';
 import { engine } from '../lib/engine';
 import { normalizeLoginCode } from '../lib/identity';
@@ -64,11 +65,13 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-surface">
-      <header className="flex h-14 items-center justify-between border-b border-line bg-white px-4 sm:px-6">
+      <header className="flex h-14 items-center justify-between border-b border-line bg-panel px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 rounded-md">
           <SiteMark className="size-7" />
           <span className="text-[15px] font-semibold tracking-tight">UR Chat</span>
         </Link>
+        <div className="flex items-center gap-1">
+        <ThemeToggle />
         {step === 'login' ? (
           <Button variant="ghost" size="sm" onClick={() => setStep('welcome')}>
             Create account
@@ -79,11 +82,12 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
             Sign in
           </Button>
         )}
+        </div>
       </header>
 
       <main className="flex flex-1 items-start justify-center px-4 py-8 sm:items-center sm:py-12">
         {step === 'welcome' ? (
-          <div className="w-full max-w-[460px] rounded-xl border border-line bg-white p-6 shadow-card sm:p-8">
+          <div className="w-full max-w-[460px] rounded-xl border border-line bg-panel p-6 shadow-card sm:p-8">
             <span className="flex size-12 items-center justify-center rounded-xl bg-accent-soft text-accent">
               <MessagesSquare className="size-6" />
             </span>
@@ -115,7 +119,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
             </Button>
           </div>
         ) : step === 'login' ? (
-          <form onSubmit={login} className="w-full max-w-[460px] rounded-xl border border-line bg-white shadow-card" noValidate>
+          <form onSubmit={login} className="w-full max-w-[460px] rounded-xl border border-line bg-panel shadow-card" noValidate>
             <div className="border-b border-line px-6 py-5">
               <h1 className="text-xl font-semibold tracking-tight">Sign in to UR Chat</h1>
               <p className="mt-1 text-sm text-muted">Enter your login code to get your account and profile on this device. Chats aren't transferred: they stay on the device where they happened.</p>
@@ -152,7 +156,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
             </div>
           </form>
         ) : (
-          <form onSubmit={submit} className="w-full max-w-[520px] rounded-xl border border-line bg-white shadow-card" noValidate>
+          <form onSubmit={submit} className="w-full max-w-[520px] rounded-xl border border-line bg-panel shadow-card" noValidate>
             <div className="border-b border-line px-6 py-5">
               <h1 className="text-xl font-semibold tracking-tight">{restoring ? 'Set up your profile again' : 'Create your profile'}</h1>
               <p className="mt-1 text-sm text-muted">

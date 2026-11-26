@@ -95,7 +95,7 @@ export default function Landing() {
                   autoCapitalize="characters"
                   autoComplete="off"
                   spellCheck={false}
-                  className="h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-white px-3.5 font-mono text-[15px] uppercase tracking-[0.12em] placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-muted/80 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  className="h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-panel px-3.5 font-mono text-[15px] uppercase tracking-[0.12em] placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-muted/80 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
                 />
                 <Button type="submit" size="lg" variant="secondary">
                   Join
@@ -122,7 +122,7 @@ export default function Landing() {
                       e.preventDefault();
                       navigate(`/room/${r.code}`);
                     }}
-                    className="flex items-center gap-3 rounded-xl border border-line bg-white p-4 hover:bg-surface"
+                    className="flex items-center gap-3 rounded-xl border border-line bg-panel p-4 hover:bg-surface"
                   >
                     <AudioLines className="size-5 text-mic" />
                     <span className="min-w-0 flex-1">
@@ -153,7 +153,7 @@ export default function Landing() {
               ['Invite people', 'Share the link, the room code or the QR code. People join from any browser.'],
               ['Talk', "Turn on your mic and speak. The speaker's card lights up, so everyone knows who's talking."],
             ].map(([t, d], i) => (
-              <li key={t} className="rounded-xl border border-line bg-white p-5">
+              <li key={t} className="rounded-xl border border-line bg-panel p-5">
                 <span className="flex size-7 items-center justify-center rounded-md border border-line text-[13px] font-semibold tabular text-ink-soft">{i + 1}</span>
                 <h3 className="mt-4 text-[15px] font-semibold">{t}</h3>
                 <p className="mt-1 text-sm leading-relaxed text-muted">{d}</p>

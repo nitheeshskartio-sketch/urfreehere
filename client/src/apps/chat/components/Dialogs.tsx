@@ -383,9 +383,9 @@ export function ScanDialog({ onClose, onResult }: { onClose: () => void; onResul
             <p className="mt-3 max-w-xs text-sm text-muted">{camError}</p>
           </div>
         ) : (
-          <div className="relative mx-auto aspect-square w-full max-w-[340px] overflow-hidden rounded-xl bg-ink">
+          <div className="relative mx-auto aspect-square w-full max-w-[340px] overflow-hidden rounded-xl bg-black">
             <video ref={video} className="size-full object-cover" playsInline muted />
-            <div className="pointer-events-none absolute inset-[14%] rounded-xl border-2 border-white/80" />
+            <div className="pointer-events-none absolute inset-[14%] rounded-xl border-2 border-panel/80" />
             <Camera className="absolute left-3 top-3 size-4 text-white/70" />
           </div>
         )}

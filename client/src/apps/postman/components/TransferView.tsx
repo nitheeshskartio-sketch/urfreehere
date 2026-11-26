@@ -50,7 +50,7 @@ export function TransferView({
       </div>
 
       {/* Stays pinned under the header on small screens so progress is always visible. */}
-      <div className="sticky top-header z-10 border-b border-line bg-white px-4 py-4 sm:static sm:px-5 sm:py-5" aria-live="polite">
+      <div className="sticky top-header z-10 border-b border-line bg-panel px-4 py-4 sm:static sm:px-5 sm:py-5" aria-live="polite">
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-[28px] font-semibold leading-none tracking-tight tabular">{Math.floor(ratio * 100)}%</p>
           <p className="text-sm text-muted tabular">

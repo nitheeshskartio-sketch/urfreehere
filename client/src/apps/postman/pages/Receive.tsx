@@ -157,7 +157,7 @@ function CodeForm({
       <PanelHeader title={scanning ? 'Scan QR code' : 'Enter sharing code'} />
       <div className="p-4 sm:p-5">
         {scanning ? (
-          <Suspense fallback={<div className="mx-auto aspect-square w-full max-w-[320px] animate-pulse rounded-lg bg-slate-100" />}>
+          <Suspense fallback={<div className="mx-auto aspect-square w-full max-w-[320px] animate-pulse rounded-lg bg-subtle" />}>
             <QrScanner onCode={onScanned} onClose={() => setScanning(false)} />
           </Suspense>
         ) : (
@@ -187,7 +187,7 @@ function CodeForm({
                 spellCheck={false}
                 maxLength={64}
                 aria-invalid={!!shownError}
-                className="h-12 min-w-0 flex-1 rounded-lg border border-line-strong bg-white px-4 font-mono text-xl uppercase tracking-[0.16em] placeholder:text-muted/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                className="h-12 min-w-0 flex-1 rounded-lg border border-line-strong bg-panel px-4 font-mono text-xl uppercase tracking-[0.16em] placeholder:text-muted/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               />
               <Button type="submit" size="lg" className="h-12 sm:px-6">
                 Connect

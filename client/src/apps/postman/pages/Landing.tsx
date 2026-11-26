@@ -131,7 +131,7 @@ function ReceiveCard() {
             inputMode="text"
             aria-invalid={!!error}
             aria-describedby={error ? 'home-code-error' : undefined}
-            className={`h-11 min-w-0 flex-1 rounded-lg border bg-white px-3.5 font-mono text-[15px] uppercase tracking-[0.12em] placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-muted/80 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 ${
+            className={`h-11 min-w-0 flex-1 rounded-lg border bg-panel px-3.5 font-mono text-[15px] uppercase tracking-[0.12em] placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-muted/80 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 ${
               error ? 'border-danger' : 'border-line-strong'
             }`}
           />
@@ -186,7 +186,7 @@ function HowItWorks() {
         <SectionTitle id="how-it-works" eyebrow="How it works" title="Three steps, no sign-up" />
         <ol className="mt-8 grid gap-4 sm:grid-cols-3 sm:gap-5">
           {steps.map((s, i) => (
-            <li key={s.title} className="rounded-xl border border-line bg-white p-5">
+            <li key={s.title} className="rounded-xl border border-line bg-panel p-5">
               <span className="flex size-7 items-center justify-center rounded-md border border-line text-[13px] font-semibold tabular text-ink-soft">
                 {i + 1}
               </span>
