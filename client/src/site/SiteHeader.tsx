@@ -3,6 +3,7 @@ import { SITE } from './config';
 import { Link } from './Link';
 import { SiteMark } from './Logo';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { InstallButton } from '../ui/InstallButton';
 
 const SITE_NAV = [
   { label: 'Apps', href: '/#apps' },
@@ -49,6 +50,7 @@ export function SiteHeader({ app }: { app?: AppDefinition }) {
               {item.label}
             </Link>
           ))}
+          <InstallButton />
           <ThemeToggle className="ml-1" />
         </nav>
       </div>

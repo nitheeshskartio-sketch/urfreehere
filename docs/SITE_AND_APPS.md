@@ -50,3 +50,13 @@ The site name lives in `src/site/config.ts`.
 4. While `listed: false`, the app is reachable only by typing its URL. It doesn't appear on the home page, in the footer or anywhere else on the site. Set `listed: true` to publish it. The home page switches from the single featured card to a grid automatically.
 
 The server doesn't need changes for new pages. Any URL without a file extension is served the app shell, and the client router decides what to show, including the 404 page.
+
+## Installable app (PWA)
+
+UR Free Here can be installed as an app on phones and computers.
+
+- **Install:** an **Install app** button appears in the site header and in the UR Chat top bar where the browser supports installing (Chrome, Edge, Samsung Internet on Android and desktop). On iPhone and iPad the button explains Safari's **Share → Add to Home Screen**. The button hides once the app is installed or opened as an app.
+- **Manifest:** [client/public/manifest.webmanifest](../client/public/manifest.webmanifest). The app opens to UR Chat, with shortcuts to UR Postman and Mic. Icons are in `client/public/icons/`, including a maskable one for Android.
+- **Service worker:** [client/public/sw.js](../client/public/sw.js) caches the app itself, not data (chats are already stored on the device). Built files under `/assets/` are cache-first because their names contain hashes. Pages are network-first, but if the network doesn't answer within 3.5 s (offline, or the free server still waking up) the cached app opens. `/api` and `/socket.io` are never touched.
+- **Updates:** the build stamps `sw.js` with a build ID (`stampServiceWorker` in `vite.config.ts`), and the server sends `sw.js` and the manifest with `Cache-Control: no-cache`, so every deploy gets a fresh cache and old files are removed.
+- The service worker registers only in production builds and needs HTTPS (or `localhost`).

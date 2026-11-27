@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "UR Free Here",
+  "short_name": "UR Free Here",
+  "description": "Private chat, file transfer and voice rooms that run on your device.",
+  "start_url": "/chat",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f5f5",
+  "theme_color": "#5B5FC7",
+  "categories": ["social", "utilities", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "UR Chat", "url": "/chat", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "UR Postman", "short_name": "Postman", "url": "/postman", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mic", "url": "/mic", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

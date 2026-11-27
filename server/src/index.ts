@@ -153,7 +153,16 @@ if (config.serveClient && existsSync(config.clientDist)) {
     '/assets',
     express.static(resolve(config.clientDist, 'assets'), { immutable: true, maxAge: '1y', index: false }),
   );
-  app.use(express.static(config.clientDist, { index: false, maxAge: '1h' }));
+  app.use(
+    express.static(config.clientDist, {
+      index: false,
+      maxAge: '1h',
+      // The service worker and app manifest must never be cached, so updates reach installed apps.
+      setHeaders: (res, path) => {
+        if (path.endsWith('sw.js') || path.endsWith('.webmanifest')) res.setHeader('Cache-Control', 'no-cache');
+      },
+    }),
+  );
   // SPA fallback: any page URL (no file extension) gets the app shell; the
   // client router decides what to show, including its own 404 page.
   app.get(/^\/(?!socket\.io\/)[^.]*$/, (_req, res) => {
