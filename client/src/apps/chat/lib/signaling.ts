@@ -60,7 +60,7 @@ export interface SignalingHandlers {
   onJoinRequest(req: JoinRequest): void;
   onInviteResult(result: InviteResult): void;
   /** Logged in. `account` is null when the server runs without accounts. */
-  onAuthed(account: AccountInfo | null, accountsEnabled: boolean, links: AccountLinks | null): void;
+  onAuthed(account: AccountInfo | null, accountsEnabled: boolean, links: AccountLinks | null, discoverable: boolean): void;
   /** A frame relayed by the server from someone we can't reach directly. */
   onRelay(from: UserId, data: unknown): void;
   /** The admin cleared someone's likes and dislikes. */
@@ -160,13 +160,13 @@ export class ChatSignaling {
         publicKey: this.identity.publicJwk,
       });
       const signature = await sign(this.identity, `urfree-chat-auth:${nonce}`);
-      const res = await this.request<{ ice: IceConfig; account: AccountInfo | null; accounts: boolean; links?: AccountLinks }>('auth:prove', {
+      const res = await this.request<{ ice: IceConfig; account: AccountInfo | null; accounts: boolean; links?: AccountLinks; discoverable?: boolean }>('auth:prove', {
         signature,
         ...this.authInfo(),
       });
       this.ice = res.ice;
       this.authed = true;
-      this.handlers.onAuthed(res.account ?? null, !!res.accounts, res.links ?? null);
+      this.handlers.onAuthed(res.account ?? null, !!res.accounts, res.links ?? null, res.discoverable !== false);
       this.handlers.onStatus('online');
       // Restore subscriptions after every (re)connect.
       if (this.watched.size) void this.flushWatch([...this.watched]);
@@ -290,6 +290,20 @@ export class ChatSignaling {
 
   joinHandled(groupId: string, requestId: string, accepted: boolean, reason?: string) {
     return this.request('group:join-handled', { groupId, requestId, accepted, reason }).catch(() => {});
+  }
+
+  /** Members to suggest in "New chat" (discoverable, recently active, not in `exclude`). */
+  async suggestPeople(q: string, exclude: UserId[]): Promise<AccountInfo[]> {
+    if (!this.authed) return [];
+    try {
+      return (await this.request<{ profiles: AccountInfo[] }>('directory:suggest', { q, exclude })).profiles ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  setDiscoverable(on: boolean) {
+    return this.request('profile:discoverable', { on });
   }
 
   /** Saves the chat list (contact and group IDs, no messages) for this account's next device. */

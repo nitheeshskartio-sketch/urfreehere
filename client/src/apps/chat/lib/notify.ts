@@ -138,6 +138,30 @@ function chime() {
 
 // ---- controller --------------------------------------------------------------
 
+// ---- app icon badge (installed app) ----------------------------------------------
+
+/** Unread count on the installed app's icon (Badging API: Chrome/Edge desktop, Android, iOS 16.4+). */
+function setAppBadge(count: number) {
+  const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+  try {
+    if (count > 0) void nav.setAppBadge?.(count).catch(() => {});
+    else void nav.clearAppBadge?.().catch(() => {});
+  } catch {
+    /* not supported */
+  }
+}
+
+/** Shows a notification, through the service worker when there is one (required on Android). */
+async function showNotification(title: string, options: NotificationOptions & { data: { url: string } }, onClick: () => void) {
+  const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration().catch(() => undefined) : undefined;
+  if (reg?.active) return reg.showNotification(title, { ...options, badge: '/icons/icon-192.png' });
+  const n = new Notification(title, options);
+  n.onclick = () => {
+    onClick();
+    n.close();
+  };
+}
+
 /** Starts notifications for the chat engine. Returns a function that stops them. */
 export function startNotifications(engine: ChatEngine): () => void {
   let blinkTimer: number | undefined;
@@ -150,6 +174,7 @@ export function startNotifications(engine: ChatEngine): () => void {
   const render = async () => {
     if (stopped) return;
     const count = engine.unreadTotal();
+    setAppBadge(count);
     const blinking = unseen && document.visibilityState === 'hidden' && count > 0;
     if (count === 0) {
       setIcon(originalHref);
@@ -211,27 +236,36 @@ export function startNotifications(engine: ChatEngine): () => void {
 
     if (engine.settings.desktopNotifications && notificationsSupported() && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
       const avatar = engine.profileOf(e.author)?.avatar;
-      try {
-        const n = new Notification(group ? `${sender} in ${group}` : sender, {
+      const url = `/chat/c/${encodeURIComponent(e.conv)}`;
+      void showNotification(
+        group ? `${sender} in ${group}` : sender,
+        {
           body: engine.settings.notificationPreview ? engine.describe(e).slice(0, 160) : 'New message',
-          icon: avatar?.startsWith('data:image/') ? avatar : '/favicon.svg',
+          icon: avatar?.startsWith('data:image/') ? avatar : '/icons/icon-192.png',
           tag: e.conv, // one notification per conversation, replaced by newer ones
           silent: true, // we play our own sound
-        });
-        n.onclick = () => {
+          data: { url },
+        },
+        () => {
           window.focus();
-          navigate(`/chat/c/${encodeURIComponent(e.conv)}`);
-          n.close();
-        };
-      } catch {
-        /* some mobile browsers only allow notifications from a service worker */
-      }
+          navigate(url);
+        },
+      ).catch(() => {});
     }
   });
+
+  // A notification shown by the service worker was tapped: open that chat here.
+  const onSwMessage = (ev: MessageEvent) => {
+    const d = ev.data as { type?: string; url?: string } | null;
+    if (d?.type === 'open' && typeof d.url === 'string' && d.url.startsWith('/chat')) navigate(d.url);
+  };
+  navigator.serviceWorker?.addEventListener('message', onSwMessage);
 
   void render();
 
   return () => {
+    navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+    setAppBadge(0);
     stopped = true;
     unsubscribeState();
     unsubscribeIncoming();

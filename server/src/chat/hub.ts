@@ -245,6 +245,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
 
       let account = null;
       let links: AccountLinks | null = null;
+      let discoverable = true;
       if (accountsConfigured()) {
         if (!accounts) return ack({ ok: false, error: 'ACCOUNTS_STARTING' });
         try {
@@ -252,7 +253,9 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
             const profile = parseProfile(p.profile);
             if (!profile) return ack({ ok: false, error: 'INVALID_PROFILE' });
             if (!settings.signupsOpen && !(await accounts.get(userId))) return ack({ ok: false, error: 'SIGNUPS_CLOSED' });
-            account = toPublic(await accounts.upsert(userId, jwk, profile));
+            const created = await accounts.upsert(userId, jwk, profile);
+            discoverable = created.discoverable !== false;
+            account = toPublic(created);
             if (deviceId) await accounts.setDevice(userId, deviceId);
           } else {
             const doc = await accounts.get(userId);
@@ -268,6 +271,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
               await accounts.setDevice(userId, deviceId); // accounts from before device tracking
             }
             await accounts.touch([userId]);
+            discoverable = doc.discoverable !== false;
             account = toPublic(doc);
           }
         } catch (err) {
@@ -288,7 +292,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       session = { userId, deviceId, publicKey: jwk, socket, watching: new Set(), groups: new Set() };
       sessions.set(userId, session);
       notifyPresence(userId, true);
-      ack({ ok: true, ice: buildIceConfig(), account, accounts: accountsConfigured(), ...(links ? { links } : {}) });
+      ack({ ok: true, ice: buildIceConfig(), account, accounts: accountsConfigured(), discoverable, ...(links ? { links } : {}) });
     });
 
     socket.on('profile:update', async (payload: unknown, ackFn: unknown) => {
@@ -318,6 +322,38 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       try {
         await accounts.setLinks(s.userId, links);
         ack({ ok: true, stored: true });
+      } catch {
+        ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+      }
+    });
+
+    /** "People on UR Chat": discoverable members to start a chat with (never suspended ones). */
+    socket.on('directory:suggest', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s) return;
+      if (!lookupLimiter.take(`u:${s.userId}`)) return ack({ ok: false, error: 'RATE_LIMITED' });
+      const p = (payload ?? {}) as { q?: unknown; exclude?: unknown };
+      const exclude = Array.isArray(p.exclude) ? p.exclude.filter(isUserId).slice(0, 1000) : [];
+      if (!accounts) return ack({ ok: true, enabled: false, profiles: [] });
+      try {
+        const docs = await accounts.suggest([s.userId, ...exclude, ...bannedIds], typeof p.q === 'string' ? p.q : '');
+        ack({ ok: true, enabled: true, profiles: docs.map(toPublic) });
+      } catch {
+        ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+      }
+    });
+
+    socket.on('profile:discoverable', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s || !bucket.take()) return;
+      const on = (payload as { on?: unknown } | null)?.on;
+      if (typeof on !== 'boolean') return ack({ ok: false, error: 'INVALID' });
+      if (!accounts) return ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
+      try {
+        await accounts.setDiscoverable(s.userId, on);
+        ack({ ok: true, discoverable: on });
       } catch {
         ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
       }

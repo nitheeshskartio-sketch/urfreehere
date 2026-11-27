@@ -32,6 +32,8 @@ export interface AccountDoc {
   links?: AccountLinks;
   /** Set by the admin: likes and dislikes this person received before this time no longer count. */
   meterResetAt?: Date;
+  /** Listed in other people's "People on UR Chat" suggestions. Missing means yes. */
+  discoverable?: boolean;
 }
 
 export interface AccountLinks {
@@ -146,6 +148,21 @@ export class AccountStore {
   async touch(userIds: string[]) {
     if (!userIds.length) return;
     await this.col.updateMany({ _id: { $in: userIds } }, { $set: { lastActiveAt: new Date() } });
+  }
+
+  /**
+   * People to suggest in "New chat": recently active, discoverable accounts,
+   * optionally matching a name, leaving out the given IDs.
+   */
+  suggest(exclude: string[], query: string, limit = 30): Promise<AccountDoc[]> {
+    const filter: Record<string, unknown> = { _id: { $nin: exclude }, discoverable: { $ne: false } };
+    const q = query.trim().slice(0, 60);
+    if (q) filter.name = { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    return this.col.find(filter).sort({ lastActiveAt: -1 }).limit(limit).toArray();
+  }
+
+  async setDiscoverable(userId: string, on: boolean) {
+    await this.col.updateOne({ _id: userId }, { $set: { discoverable: on } });
   }
 
   lookup(userIds: string[]): Promise<AccountDoc[]> {

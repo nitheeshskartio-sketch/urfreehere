@@ -1,4 +1,4 @@
-import { Camera, CameraOff, ImageUp, LoaderCircle, QrCode, RotateCcw, Users } from 'lucide-react';
+import { Camera, CameraOff, ImageUp, LoaderCircle, MessageCirclePlus, QrCode, RotateCcw, Search, Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../../ui/Button';
 import { CopyButton } from '../../../ui/CopyButton';
@@ -74,6 +74,17 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
           </Button>
         </div>
       </form>
+      {e.accountsEnabled && (
+        <PeopleSuggestions
+          onStart={(id) => {
+            const conv = e.startDirectChat(id);
+            if (conv) {
+              onOpen(conv);
+              onClose();
+            }
+          }}
+        />
+      )}
       <div className="border-t border-line p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -93,6 +104,58 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
         )}
       </div>
     </Modal>
+  );
+}
+
+/** "People on UR Chat": members you haven't chatted with yet. Your first message reaches them as a chat request. */
+function PeopleSuggestions({ onStart }: { onStart: (id: string) => void }) {
+  const e = useEngine();
+  const [q, setQ] = useState('');
+  const [people, setPeople] = useState<{ userId: string; name: string; status: string; avatar: string | null }[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    const t = window.setTimeout(
+      () => void e.suggestPeople(q).then((list) => live && setPeople(list)),
+      q ? 300 : 0,
+    );
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [q, e]);
+
+  return (
+    <div className="border-t border-line p-4 sm:p-5">
+      <p className="text-[13px] font-medium text-ink-soft">People on UR Chat</p>
+      <p className="mt-0.5 text-[12px] text-muted">Members you haven't chatted with yet. Your first message reaches them as a chat request.</p>
+      <label className="relative mt-2.5 block">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+        <input className={`${inputClass} pl-8`} value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Search by name" aria-label="Search people by name" />
+      </label>
+      <ul className="mt-2 max-h-[260px] overflow-y-auto">
+        {people === null ? (
+          <li className="flex justify-center py-4 text-muted">
+            <LoaderCircle className="size-5 animate-spin" />
+          </li>
+        ) : people.length === 0 ? (
+          <li className="py-4 text-center text-[13px] text-muted">{q ? 'Nobody with that name.' : 'No one new to suggest right now.'}</li>
+        ) : (
+          people.map((p) => (
+            <li key={p.userId} className="flex items-center gap-3 rounded-md px-1 py-2 hover:bg-surface">
+              <Avatar avatar={p.avatar} name={p.name} seed={p.userId} size={36} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{p.name}</span>
+                <span className="block truncate text-[12px] text-muted">{p.status || formatUserId(p.userId)}</span>
+              </span>
+              <Button size="sm" variant="secondary" onClick={() => onStart(p.userId)} aria-label={`Message ${p.name}`}>
+                <MessageCirclePlus />
+                Message
+              </Button>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
   );
 }
 

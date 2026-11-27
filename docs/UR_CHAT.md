@@ -193,6 +193,16 @@ Messages, photos, files, hugs, slaps, promises and reactions are removed from ev
 
 Each device sweeps at start and every 5 minutes, and expires anything older that arrives from a peer straight away. An expired event becomes a content-free tombstone (`local.expired`, body `{}`, its photo or file deleted) that keeps its author and sequence number. Gap-free sync asks the other side for every missing number, so the last sync reply also carries `expired` ranges per author (`{ author: [[from, to], …] }`). The receiver counts those numbers as received and saves them (`expiredSeqs` in IndexedDB), so it never keeps asking for messages that no longer exist anywhere.
 
+## People on UR Chat (suggestions)
+
+**New chat** lists **People on UR Chat**: discoverable members you have no chat with yet, most recently active first, searchable by name. **Message** opens a chat, and your first message reaches them as a chat request, as with a chat ID. The server answers `directory:suggest` with public profiles (name, status, picture, public key) from MongoDB, leaving out you, your contacts and suspended accounts. It's rate-limited per user, and each key is checked against its chat ID before it's used.
+
+Everyone is listed by default. **Settings → Privacy & data → Show me in "People on UR Chat"** turns it off (`discoverable: false` on the account).
+
+## Notifications and the app badge
+
+In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on desktop, Android, iOS 16.4+ when notifications are allowed) and clears when everything is read. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`). There's no push server, so the badge and notifications update only while the app is open or in the background, not after it's been closed.
+
 ## Inactivity lock
 
 After 20 seconds without activity, UR Chat blurs behind a lock button. It also locks when you come back to a tab that was hidden for 20 seconds or more. Any mouse movement, tap, key or scroll brings it straight back, exactly where you were. It's a privacy screen, not a password lock. It's on by default, and **Settings → Privacy & data → Lock after 20 seconds of inactivity** turns it off.

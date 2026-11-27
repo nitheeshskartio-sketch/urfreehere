@@ -283,6 +283,14 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
             label="Lock after 20 seconds of inactivity"
             hint="Blurs UR Chat behind a lock when you're away. Move or tap to continue."
           />
+          {e.accountsEnabled && (
+            <Toggle
+              checked={e.discoverable}
+              onChange={(v) => void e.setDiscoverable(v).catch((err: Error) => e.toast(err.message || "Couldn't change this. Try again.", 'error'))}
+              label="Show me in “People on UR Chat”"
+              hint="Other members can find your name and picture in New chat and send you a chat request."
+            />
+          )}
           <div className="space-y-2 leading-relaxed text-ink-soft">
             <p>
               <span className="font-semibold text-ink">How messages travel.</span> Messages, photos, documents and locations go directly between devices over WebRTC

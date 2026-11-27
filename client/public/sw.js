@@ -87,3 +87,19 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+// A message notification was tapped: bring the app forward on that chat, or open it.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/chat';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const client = list.find((c) => new URL(c.url).origin === self.location.origin);
+      if (client) {
+        client.postMessage({ type: 'open', url });
+        return client.focus();
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

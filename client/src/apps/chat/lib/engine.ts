@@ -279,6 +279,8 @@ export class ChatEngine {
   private lastLinks = '';
   /** Browser features that are missing when status is "unsupported". */
   unsupportedReason: string[] = [];
+  /** Listed in other people's "People on UR Chat" suggestions. */
+  discoverable = true;
   /** Whether the server keeps accounts (MongoDB configured). */
   accountsEnabled = false;
   /** Show the "save your login code" prompt once after sign-up. */
@@ -679,6 +681,29 @@ export class ChatEngine {
 
   // ------------------------------------------------------------- directory
 
+  /**
+   * Members I could start a chat with: discoverable accounts I have no chat
+   * with yet. Each key is checked against its chat ID before it's trusted.
+   */
+  async suggestPeople(q = ''): Promise<{ userId: UserId; name: string; status: string; avatar: string | null }[]> {
+    const exclude = [...this.contacts.keys()];
+    const list = await this.signaling?.suggestPeople(q, exclude) ?? [];
+    const out: { userId: UserId; name: string; status: string; avatar: string | null }[] = [];
+    for (const p of list) {
+      if (p.userId === this.me || this.contacts.has(p.userId) || !(await keyMatchesId(p.publicKey, p.userId))) continue;
+      this.directoryKeys.set(p.userId, p.publicKey as PublicJwk);
+      out.push({ userId: p.userId, name: p.name, status: p.status, avatar: p.avatar });
+    }
+    return out;
+  }
+
+  async setDiscoverable(on: boolean) {
+    if (!this.signaling?.online) throw new Error("You're offline. Try again when you're connected.");
+    await this.signaling.setDiscoverable(on);
+    this.discoverable = on;
+    this.notify();
+  }
+
   /** Looks up chat IDs in the account directory and remembers verified names, pictures and keys. */
   async lookupUsers(ids: UserId[]): Promise<{ enabled: boolean; found: Set<UserId> }> {
     const found = new Set<UserId>();
@@ -710,7 +735,10 @@ export class ChatEngine {
     this.signaling = new ChatSignaling(
       this.identity,
       {
-      onAuthed: (account, enabled, links) => void this.onAuthed(account, enabled, links),
+      onAuthed: (account, enabled, links, discoverable) => {
+        this.discoverable = discoverable;
+        void this.onAuthed(account, enabled, links);
+      },
       onStatus: (s) => {
         if (s === 'missing') {
           this.removedByAdmin = !!this.signaling?.removedByAdmin;
