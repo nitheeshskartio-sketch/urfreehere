@@ -121,6 +121,8 @@ export interface StoredEvent extends ChatEvent {
     sent?: boolean;
     /** A received hug whose animation has been shown. */
     played?: boolean;
+    /** Older than the 3-day limit: content removed, kept only so the sequence stays gap-free. */
+    expired?: boolean;
   };
 }
 
@@ -176,6 +178,8 @@ export interface Settings {
   density: 'comfortable' | 'compact';
   /** Clock style for message times. */
   clock: 'auto' | '12h' | '24h';
+  /** Blur the app behind a lock after 20 seconds without activity. */
+  idleLock: boolean;
 }
 
 export type FileTransferState =

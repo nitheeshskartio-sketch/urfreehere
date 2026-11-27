@@ -277,16 +277,26 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
 
       {tab === 'privacy' && (
         <div className="space-y-5 p-4 text-sm sm:p-5">
+          <Toggle
+            checked={e.settings.idleLock}
+            onChange={(v) => void e.updateSettings({ idleLock: v })}
+            label="Lock after 20 seconds of inactivity"
+            hint="Blurs UR Chat behind a lock when you're away. Move or tap to continue."
+          />
           <div className="space-y-2 leading-relaxed text-ink-soft">
             <p>
               <span className="font-semibold text-ink">How messages travel.</span> Messages, photos, documents and locations go directly between devices over WebRTC
-              connections, which are always encrypted (DTLS). Each connection is checked against the other person's chat ID. When a direct path is blocked, an encrypted
-              relay may forward the data without being able to read it.
+              connections, which are always encrypted (DTLS). Each connection is checked against the other person's chat ID. When a direct path is blocked, the UR Free
+              Here server passes them on without storing them; every message is still signed by its sender and checked on arrival.
+            </p>
+            <p>
+              <span className="font-semibold text-ink">Messages disappear after 3 days.</span> Messages, photos and files are removed from every device 3 days after
+              they're sent. Emoji, like meters and group members stay.
             </p>
             <p>
               <span className="font-semibold text-ink">What the server stores.</span> Your account: chat ID, public key, name, status, picture and when you were last
-              active. Accounts are deleted automatically after 7 days without activity. The server also sees which chat IDs are online, connection handshakes and group
-              invitation details. It never receives messages, chat history or files.
+              active, and the IDs of your contacts and groups (so a new device can rebuild your chat list). Accounts are deleted automatically after 7 days without activity.
+              The server also sees which chat IDs are online, connection handshakes and group invitation details. It never stores messages or files.
             </p>
             <p>
               <span className="font-semibold text-ink">Where chats are stored.</span> Only on this device, in this browser. Clearing site data or deleting it below removes

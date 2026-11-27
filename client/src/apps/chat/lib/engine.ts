@@ -110,6 +110,21 @@ function applyAppearance(s: Settings) {
 }
 
 /** Marks a message body as secret or view-once. */
+/** Messages are removed from every device this long after they were sent. */
+export const MESSAGE_LIFETIME_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Sorted, de-duplicated numbers as inclusive ranges: [1,2,3,7] -> [[1,3],[7,7]]. */
+function toRanges(nums: number[]): [number, number][] {
+  const sorted = [...new Set(nums)].sort((a, b) => a - b);
+  const out: [number, number][] = [];
+  for (const n of sorted) {
+    const last = out[out.length - 1];
+    if (last && n === last[1] + 1) last[1] = n;
+    else out.push([n, n]);
+  }
+  return out;
+}
+
 /** The signed event without local state, as sent to peers. */
 function stripEvent(e: StoredEvent): ChatEvent {
   return { v: e.v, id: e.id, conv: e.conv, author: e.author, seq: e.seq, ts: e.ts, kind: e.kind, body: e.body, replyTo: e.replyTo, sig: e.sig };
@@ -288,6 +303,7 @@ export class ChatEngine {
     textSize: 'md',
     density: 'comfortable',
     clock: 'auto',
+    idleLock: true,
   };
 
   contacts = new Map<UserId, Contact>();
@@ -315,6 +331,8 @@ export class ChatEngine {
   private moodSeen = new Map<ConvId, number>();
   /** conversation -> running like/dislike totals each person published, in order (totals only grow) */
   private meters = new Map<ConvId, Map<UserId, (Meter & { ts: number })[]>>();
+  /** conversation -> author -> message numbers that expired elsewhere (we never had them) */
+  private expiredSeqs = new Map<ConvId, Map<UserId, [number, number][]>>();
   /** person -> admin reset time: likes and dislikes they received before it don't count */
   private meterResets = new Map<UserId, number>();
   /** Taps not published yet: bundled into one event shortly after the last tap. */
@@ -476,6 +494,9 @@ export class ChatEngine {
       this.deviceId = (await db.get<string>('kv', 'deviceId')) ?? '';
       this.historyStart = (await db.get<number>('kv', 'historyStart')) ?? 0;
       for (const [k, v] of Object.entries((await db.get<Record<string, number>>('kv', 'meterResets')) ?? {})) this.meterResets.set(k, v);
+      for (const [conv, byAuthor] of Object.entries((await db.get<Record<string, Record<string, [number, number][]>>>('kv', 'expiredSeqs')) ?? {})) {
+        this.expiredSeqs.set(conv, new Map(Object.entries(byAuthor)));
+      }
       for (const [k, v] of Object.entries((await db.get<Record<string, number>>('kv', 'moodSeen')) ?? {})) this.moodSeen.set(k, v);
       for (const [k, v] of Object.entries((await db.get<Record<string, UserId[]>>('kv', 'restoredGroups')) ?? {})) {
         this.restoredGroups.set(k, v);
@@ -503,6 +524,18 @@ export class ChatEngine {
       const all = await db.getAll<StoredEvent>('events');
       all.sort((a, b) => a.ts - b.ts);
       for (const e of all) this.index(e);
+      // Message numbers that expired on other devices count as received.
+      for (const [conv, byAuthor] of this.expiredSeqs) {
+        let authors = this.seqs.get(conv);
+        if (!authors) this.seqs.set(conv, (authors = new Map()));
+        for (const [author, ranges] of byAuthor) {
+          let set = authors.get(author);
+          if (!set) authors.set(author, (set = new Set()));
+          for (const [a, b] of ranges) for (let n = a; n <= b; n++) set.add(n);
+        }
+      }
+      this.expireOld();
+      window.setInterval(() => this.expireOld(), 5 * 60 * 1000);
       for (const conv of this.convs.values()) if (conv.groupId) await this.rederive(conv.groupId);
     } catch (err) {
       console.error(err);
@@ -817,7 +850,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter');
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.expired && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -1250,7 +1283,7 @@ export class ChatEngine {
   private async flushOutbox(s: ChatSession) {
     let purged = 0;
     for (const conv of this.sharedConvs(s.peerId)) {
-      const mine = (this.events.get(conv) ?? []).filter((x) => x.author === this.me && !x.local.deleted).sort((a, b) => a.seq - b.seq);
+      const mine = (this.events.get(conv) ?? []).filter((x) => x.author === this.me && !x.local.deleted && !x.local.expired).sort((a, b) => a.seq - b.seq);
       const delivered = (x: StoredEvent) => !!x.local.sent || Object.keys(x.local.receipts).length > 0;
       const lastSent = mine.reduce((n, x) => (delivered(x) ? Math.max(n, x.seq) : n), 0);
       for (const x of mine) {
@@ -1264,6 +1297,89 @@ export class ChatEngine {
     }
     if (purged) this.toast(`${purged} unsent message${purged === 1 ? ' was' : 's were'} removed: newer messages had already been delivered.`);
     this.notify();
+  }
+
+  // ------------------------------------------------------------ expiry
+
+  /** Messages and what belongs to them; emoji, like totals and group membership never expire. */
+  private isTooOld(e: StoredEvent) {
+    return !e.local.expired && e.kind !== 'op' && e.kind !== 'mood' && e.kind !== 'meter' && e.ts < Date.now() - MESSAGE_LIFETIME_MS;
+  }
+
+  /** Removes a message's content (and its photo or file) but keeps its number for gap-free sync. */
+  private expire(e: StoredEvent) {
+    if (e.local.expired) return;
+    if ((e.kind === 'image' || e.kind === 'file') && typeof (e.body as Record<string, unknown>).fileId === 'string') void this.dropFile(String(e.body.fileId));
+    e.local.expired = true;
+    e.body = {};
+    e.replyTo = null;
+    this.queueWrite('events', e.id, e);
+  }
+
+  /** Expires everything older than 3 days. Runs at start and every few minutes. */
+  private expireOld() {
+    let n = 0;
+    for (const list of this.events.values()) {
+      for (const e of list) {
+        if (this.isTooOld(e)) {
+          this.expire(e);
+          n++;
+        }
+      }
+    }
+    if (n) this.notify();
+  }
+
+  /** Expired message numbers (mine as tombstones, plus ones others told me about) the requester doesn't have yet. */
+  private expiredRanges(conv: ConvId, vector: Record<string, number>): Record<UserId, [number, number][]> {
+    const seqs = new Map<UserId, number[]>();
+    const add = (author: UserId, n: number) => {
+      if (n <= (Number(vector?.[author]) || 0)) return;
+      let l = seqs.get(author);
+      if (!l) seqs.set(author, (l = []));
+      l.push(n);
+    };
+    for (const e of this.events.get(conv) ?? []) if (e.local.expired) add(e.author, e.seq);
+    for (const [author, ranges] of this.expiredSeqs.get(conv) ?? []) for (const [a, b] of ranges) for (let n = Math.max(a, (Number(vector?.[author]) || 0) + 1); n <= b; n++) add(author, n);
+    const out: Record<UserId, [number, number][]> = {};
+    for (const [author, list] of seqs) out[author] = toRanges(list);
+    return out;
+  }
+
+  /** The other side says these message numbers expired: count them as received. */
+  private markExpired(conv: ConvId, raw: unknown) {
+    if (!raw || typeof raw !== 'object' || !CONV_RE.test(conv)) return;
+    let authors = this.seqs.get(conv);
+    if (!authors) this.seqs.set(conv, (authors = new Map()));
+    let stored = this.expiredSeqs.get(conv);
+    let budget = 100_000;
+    let changed = false;
+    for (const [author, ranges] of Object.entries(raw as Record<string, unknown>).slice(0, 64)) {
+      if (!USER_ID_RE.test(author) || !Array.isArray(ranges)) continue;
+      let set = authors.get(author);
+      if (!set) authors.set(author, (set = new Set()));
+      const fresh: number[] = [];
+      for (const r of ranges.slice(0, 500)) {
+        if (!Array.isArray(r) || !Number.isInteger(r[0]) || !Number.isInteger(r[1]) || r[0] < 1 || r[1] < r[0]) continue;
+        for (let n = r[0]; n <= r[1] && budget > 0; n++, budget--) {
+          if (!set.has(n)) {
+            set.add(n);
+            fresh.push(n);
+          }
+        }
+      }
+      if (fresh.length) {
+        if (!stored) this.expiredSeqs.set(conv, (stored = new Map()));
+        const merged = [...(stored.get(author) ?? []).flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, i) => a + i)), ...fresh];
+        stored.set(author, toRanges(merged));
+        changed = true;
+      }
+    }
+    if (changed) {
+      const obj: Record<string, Record<string, [number, number][]>> = {};
+      for (const [c, m] of this.expiredSeqs) obj[c] = Object.fromEntries(m);
+      void db.put('kv', obj, 'expiredSeqs');
+    }
   }
 
   /**
@@ -1317,6 +1433,7 @@ export class ChatEngine {
         if (Array.isArray(msg.events)) {
           for (const e of msg.events.slice(0, SYNC_BATCH * 2)) await this.ingest(e, peer);
         }
+        if (msg.expired && this.mayRead(peer, String(msg.conv))) this.markExpired(String(msg.conv), msg.expired);
         if (msg.done) this.onSyncDone(String(msg.conv));
         break;
       case 'event':
@@ -1389,17 +1506,20 @@ export class ChatEngine {
       this.sendTo(peer, { t: 'events', conv, events: [], done: true });
       return;
     }
-    const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.opened && !e.local.revoked && e.seq > (Number(vector?.[e.author]) || 0));
+    const want = (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.expired && !e.local.opened && !e.local.revoked && e.seq > (Number(vector?.[e.author]) || 0));
+    // Numbers of messages that expired here: the other side marks them as done instead of asking forever.
+    const expired = this.expiredRanges(conv, vector);
     // Group operations first so the receiver can verify the messages that follow.
     want.sort((a, b) => (a.kind === 'op' ? 0 : 1) - (b.kind === 'op' ? 0 : 1) || a.ts - b.ts);
     const strip = stripEvent;
     if (!want.length) {
-      this.sendTo(peer, { t: 'events', conv, events: [], done: true });
+      this.sendTo(peer, { t: 'events', conv, events: [], done: true, expired });
       return;
     }
     for (let i = 0; i < want.length; i += SYNC_BATCH) {
       const chunk = want.slice(i, i + SYNC_BATCH).map(strip);
-      this.sendTo(peer, { t: 'events', conv, events: chunk, done: i + SYNC_BATCH >= want.length });
+      const done = i + SYNC_BATCH >= want.length;
+      this.sendTo(peer, { t: 'events', conv, events: chunk, done, ...(done ? { expired } : {}) });
     }
     // They now have my messages: mark them as handed over.
     for (const e of want) if (e.author === this.me && !e.local.sent) this.markSent(e);
@@ -1484,6 +1604,7 @@ export class ChatEngine {
 
   private store(e: StoredEvent) {
     this.index(e);
+    if (this.isTooOld(e)) return void this.expire(e);
     this.queueWrite('events', e.id, e);
     let conv = this.convs.get(e.conv);
     if (!conv && e.conv.startsWith('dm:')) conv = this.ensureDm(e.author === this.me ? e.conv.slice(3).split(':').find((u) => u !== this.me)! : e.author, 'request');

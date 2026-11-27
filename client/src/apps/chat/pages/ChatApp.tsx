@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSqua
 import { Button } from '../../../ui/Button';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { BlastHost } from '../components/Effects';
+import { IdleLock } from '../components/IdleLock';
 import { LoginCodeDialog } from '../components/LoginCode';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../../../lib/router';
@@ -267,6 +268,7 @@ export default function ChatApp({ path }: { path: string }) {
       )}
       <Toasts />
       <BlastHost />
+      <IdleLock enabled={e.settings.idleLock} />
     </div>
   );
 }

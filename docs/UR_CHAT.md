@@ -187,6 +187,16 @@ Type something and choose 📎 → **Ask for a promise** (or right-click Send �
 
 The answer is a `promise-reply` event (`yes`, `no`, or `cancel` from the asker); the first valid answer counts. After it, both can chat normally. Yes shows "🤞 … promised" with a 🤝 blast. No and take-back cross the promise out. Direct chats with accepted contacts only.
 
+## Messages disappear after 3 days
+
+Messages, photos, files, hugs, slaps, promises and reactions are removed from every device 3 days after they were sent (`MESSAGE_LIFETIME_MS`). Each chat says so at the top. Emoji, like-meter totals and group membership never expire.
+
+Each device sweeps at start and every 5 minutes, and expires anything older that arrives from a peer straight away. An expired event becomes a content-free tombstone (`local.expired`, body `{}`, its photo or file deleted) that keeps its author and sequence number. Gap-free sync asks the other side for every missing number, so the last sync reply also carries `expired` ranges per author (`{ author: [[from, to], …] }`). The receiver counts those numbers as received and saves them (`expiredSeqs` in IndexedDB), so it never keeps asking for messages that no longer exist anywhere.
+
+## Inactivity lock
+
+After 20 seconds without activity, UR Chat blurs behind a lock button. It also locks when you come back to a tab that was hidden for 20 seconds or more. Any mouse movement, tap, key or scroll brings it straight back, exactly where you were. It's a privacy screen, not a password lock. It's on by default, and **Settings → Privacy & data → Lock after 20 seconds of inactivity** turns it off.
+
 ## Unsent messages
 
 Messages written while the other person isn't reachable wait on your device ("waiting"). The moment a connection opens, they go out straight away, oldest first, before anything new (`flushOutbox`). If one is still unsent although a later message of yours was already delivered, it would now arrive late and out of order. It's purged instead: removed from your chat and replaced by an empty signed `skip` event with the same sequence number, so the other side's history stays gap-free. A toast says how many were removed.

@@ -422,7 +422,11 @@ function MessageList({
   onJump: (id: string) => void;
 }) {
   const e = useEngine();
-  const out: React.ReactNode[] = [];
+  const out: React.ReactNode[] = [
+    <p key="lifetime" className="mx-auto mb-2 mt-1 w-fit rounded-full bg-surface px-3 py-1 text-center text-[12px] text-muted">
+      ⏳ Messages disappear 3 days after they're sent
+    </p>,
+  ];
   let lastDay = '';
   let prev: StoredEvent | null = null;
   for (const ev of events) {
