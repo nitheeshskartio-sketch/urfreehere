@@ -2,7 +2,7 @@ import qrcode from 'qrcode-generator';
 import { useMemo } from 'react';
 
 /** Renders a QR code as a single crisp SVG path. */
-export function QRCode({ value, className = '' }: { value: string; className?: string }) {
+export function QRCode({ value, className = '', label = 'QR code for the sharing link' }: { value: string; className?: string; label?: string }) {
   const { path, size } = useMemo(() => {
     const qr = qrcode(0, 'M');
     qr.addData(value);
@@ -24,7 +24,7 @@ export function QRCode({ value, className = '' }: { value: string; className?: s
       className={className}
       shapeRendering="crispEdges"
       role="img"
-      aria-label="QR code for the sharing link"
+      aria-label={label}
     >
       <rect width={size} height={size} fill="#fff" />
       <path d={path} fill="#172033" />
