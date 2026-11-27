@@ -201,7 +201,15 @@ Everyone is listed by default. **Settings → Privacy & data → Show me in "Peo
 
 ## Notifications and the app badge
 
-In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on Windows, macOS and ChromeOS, Android, iOS 16.4+ when notifications are allowed; Chrome doesn't support icon badges on Linux) and clears when everything is read. Notifications are shown whenever UR Chat isn't the focused window: minimised, in another tab, or behind another window. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`). There's no push server, so the badge and notifications update only while the app is open or in the background, not after it's been closed.
+In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on Windows, macOS and ChromeOS, Android, iOS 16.4+ when notifications are allowed; Chrome doesn't support icon badges on Linux) and clears when everything is read. Notifications are shown whenever UR Chat isn't the focused window: minimised, in another tab, or behind another window. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`).
+
+**While the app is closed: Web Push.** With desktop notifications on, the device subscribes to Web Push (`push:subscribe`). The server's VAPID keys come from `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`, or are created once and kept in MongoDB (`site_settings` "vapid"). Subscriptions live in `push_subs` ([server/src/chat/push.ts](../server/src/chat/push.ts)).
+
+- After each burst of messages, the sender's device sends `push:notify` (recipient + chat). The server pushes only if the recipient has no live connection (the app is closed), and only for a chat the sender belongs to: their direct chat, or a group they announced. It's limited to one push per sender, recipient and chat every 20 s, and 60 per sender per hour.
+- The push says "Alex: Sent you a message" (or "… in Group"). It carries no message text, because the server never has messages; the message itself arrives when both devices are online.
+- The service worker shows the notification unless UR Chat is open and in front, counts unread pushes on the app icon (`urfree-meta` cache), and resets the count when the app opens. Tapping opens that chat.
+- Signing in with the login code on another device, or deleting the account, removes the old subscriptions.
+- iPhone and iPad get push only for the installed app (iOS 16.4+). Chrome on Linux shows notifications but no icon badge.
 
 ## Inactivity lock
 

@@ -242,6 +242,11 @@ export class AccountStore {
     await this.bans.deleteOne({ _id: userId });
   }
 
+  /** Web Push subscriptions (see push.ts). */
+  pushCollection<T extends { _id: string }>(): Collection<T> {
+    return this.db.collection<T>('push_subs');
+  }
+
   async loadSetting<T>(key: string): Promise<T | null> {
     return ((await this.site.findOne({ _id: key }))?.value as T) ?? null;
   }

@@ -28,6 +28,7 @@ interface ChatAdmin {
   inviteCount(): number;
   kick(userId: string, reason: 'deleted' | 'banned'): boolean;
   meterReset(userId: string, at: number): void;
+  forgetPush(userId: string): Promise<void>;
   relayStats(): { enabled: boolean; mbPerUserPerHour: number; mbLastHour: number };
 }
 
@@ -255,6 +256,7 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
     const doc = await a.get(id).catch(() => null);
     const removed = await a.remove(id).catch(() => false);
     if (!removed) return res.status(404).json({ error: 'NOT_FOUND' });
+    void opts.chat.forgetPush(id);
     if (req.query.ban === '1') await ban(req, id, String(req.query.reason ?? '').slice(0, 200), doc?.name ?? null);
     else opts.chat.kick(id, 'deleted');
     audit(req, `Deleted profile ${doc?.name ?? ''} (${id})`);

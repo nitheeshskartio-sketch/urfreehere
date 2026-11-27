@@ -292,6 +292,29 @@ export class ChatSignaling {
     return this.request('group:join-handled', { groupId, requestId, accepted, reason }).catch(() => {});
   }
 
+ /** Web Push key of this server (VAPID public key). */
+  async pushKey(): Promise<string | null> {
+    if (!this.authed) return null;
+    try {
+      return (await this.request<{ key: string }>('push:key', {})).key;
+    } catch {
+      return null;
+    }
+  }
+
+  pushSubscribe(sub: unknown) {
+    return this.request('push:subscribe', { sub });
+  }
+
+  pushUnsubscribe(endpoint: string) {
+    return this.request('push:unsubscribe', { endpoint }).catch(() => {});
+  }
+
+  /** Someone whose app is closed got a message from me: ask the server to push "X sent you a message". */
+  pushNotify(to: UserId, conv: string, group: string | null) {
+    return this.request('push:notify', { to, conv, group }).catch(() => {});
+  }
+
   /** Members to suggest in "New chat" (discoverable, recently active, not in `exclude`). */
   async suggestPeople(q: string, exclude: UserId[]): Promise<AccountInfo[]> {
     if (!this.authed) return [];

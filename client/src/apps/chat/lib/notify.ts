@@ -266,9 +266,16 @@ export function startNotifications(engine: ChatEngine): () => void {
   };
   navigator.serviceWorker?.addEventListener('message', onSwMessage);
 
+  // Pushes counted while the app was closed are now read here: reset that counter.
+  const resetPushCount = () => navigator.serviceWorker?.controller?.postMessage({ type: 'badge-reset' });
+  resetPushCount();
+  const onFocusReset = () => !away() && resetPushCount();
+  window.addEventListener('focus', onFocusReset);
+
   void render();
 
   return () => {
+    window.removeEventListener('focus', onFocusReset);
     navigator.serviceWorker?.removeEventListener('message', onSwMessage);
     window.removeEventListener('focus', onVisibility);
     window.removeEventListener('blur', onVisibility);

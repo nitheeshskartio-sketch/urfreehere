@@ -128,6 +128,7 @@ const chat = attachChat(io, app, {
   production: config.isProduction,
   accounts: accountStore,
   relayMbPerHour: config.relayMbPerHour,
+  push: { publicKey: config.vapidPublicKey, privateKey: config.vapidPrivateKey, subject: config.vapidSubject },
 });
 
 // --- GIPHY proxy for UR Chat (key stays on the server) --------------------

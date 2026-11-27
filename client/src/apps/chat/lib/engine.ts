@@ -110,6 +110,15 @@ function applyAppearance(s: Settings) {
 }
 
 /** Marks a message body as secret or view-once. */
+function base64UrlBytes(s: string): Uint8Array<ArrayBuffer> {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4);
+  return Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)) as Uint8Array<ArrayBuffer>;
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array) {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
 /** Messages are removed from every device this long after they were sent. */
 export const MESSAGE_LIFETIME_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -660,6 +669,7 @@ export class ChatEngine {
     this.notify();
     if (wasLogin) loginDone?.('found');
     void this.refreshDirectory();
+    void this.syncPush();
   }
 
   private onAccountMissing() {
@@ -1868,6 +1878,9 @@ export class ChatEngine {
       if (p === this.me) continue;
       if (this.sendTo(p, { t: 'event', e })) pushed = true;
       else this.maybeConnect(p);
+      // The server pushes only if their app isn't connected (it knows at once when an app closes;
+      // a peer connection can still look open here for a few seconds).
+      if (isMessage(e)) this.pushFor(p, e.conv);
     }
     if (pushed) this.markSent(stored);
     this.notify();
@@ -2510,6 +2523,60 @@ export class ChatEngine {
     await db.put('kv', this.settings, 'settings');
     applyAppearance(this.settings);
     this.notify();
+    if ('desktopNotifications' in patch) void this.syncPush();
+  }
+
+  // ------------------------------------------------------------- web push
+
+  /**
+   * Notifications while the app is closed: subscribe this browser to Web Push
+   * when desktop notifications are on (and allowed), unsubscribe when off.
+   */
+  async syncPush() {
+    if (!this.signaling?.online || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const reg = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+    if (!reg) return;
+    const current = await reg.pushManager.getSubscription().catch(() => null);
+    const wanted = this.settings.desktopNotifications && 'Notification' in window && Notification.permission === 'granted';
+    if (!wanted) {
+      if (current) {
+        void this.signaling.pushUnsubscribe(current.endpoint);
+        await current.unsubscribe().catch(() => {});
+      }
+      return;
+    }
+    const key = await this.signaling.pushKey();
+    if (!key) return;
+    const keyBytes = base64UrlBytes(key);
+    let sub = current;
+    // The server's key changed (new keys): the old subscription can't be used.
+    const oldKey = current?.options.applicationServerKey;
+    if (current && oldKey && !sameBytes(new Uint8Array(oldKey), keyBytes)) {
+      await current.unsubscribe().catch(() => {});
+      sub = null;
+    }
+    try {
+      sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes });
+      await this.signaling.pushSubscribe(sub.toJSON());
+    } catch (err) {
+      console.warn('[push] subscribe failed', err);
+    }
+  }
+
+  private pushTimers = new Map<string, number>();
+
+  /** I sent them a message: if their app is closed, the server pushes a notification. */
+  private pushFor(peer: UserId, conv: ConvId) {
+    const key = `${peer}|${conv}`;
+    if (this.pushTimers.has(key)) return; // one request for a burst of messages
+    this.pushTimers.set(
+      key,
+      window.setTimeout(() => {
+        this.pushTimers.delete(key);
+        const c = this.convs.get(conv);
+        void this.signaling?.pushNotify(peer, conv, c?.type === 'group' ? this.convTitle(c) : null);
+      }, 1500),
+    );
   }
 
   /**

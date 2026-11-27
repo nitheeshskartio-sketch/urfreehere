@@ -16,6 +16,7 @@ import {
 import { AccountStore, parseProfile, toPublic, type AccountLinks } from './accounts.js';
 import { InviteStore, type InvitePreview, type JoinRequest } from './invites.js';
 import { bannedIds, settings } from '../settings.js';
+import { PushService } from './push.js';
 
 /**
  * UR Chat signaling hub (Socket.IO namespace "/chat").
@@ -39,6 +40,7 @@ export interface ChatHubOptions {
   accounts: Promise<AccountStore> | null;
   /** Per-user relay budget; 0 disables the relay. */
   relayMbPerHour: number;
+  push: { publicKey: string; privateKey: string; subject: string };
 }
 
 interface Session {
@@ -189,6 +191,8 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     for (const w of watchers.get(userId) ?? []) emitTo(w, 'presence', { userId, online });
   };
 
+  const push = new PushService({ accounts: opts.accounts, production: opts.production, ...opts.push });
+
   const deliverPending = (groupId: string, toUserId?: string) => {
     for (const req of invites.pendingFor(groupId)) {
       if (toUserId) emitTo(toUserId, 'group:join-request', req);
@@ -263,6 +267,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
             if (mode === 'login') {
               // Signing in with the login code makes this the account's only device.
               if (deviceId) await accounts.setDevice(userId, deviceId);
+              await push.forgetUser(userId); // the old device must not keep getting notifications
               links = doc.links ?? null;
             } else if (deviceId && doc.deviceId && doc.deviceId !== deviceId) {
               // Someone signed in with the login code on another device since: this one lost access.
@@ -325,6 +330,49 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       } catch {
         ack({ ok: false, error: 'ACCOUNTS_UNAVAILABLE' });
       }
+    });
+
+    // --- Web Push: notifications while the app is closed (no message content).
+    socket.on('push:key', async (_p: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      if (!authed(ack)) return;
+      const key = await push.publicKey();
+      ack(key ? { ok: true, key } : { ok: false, error: 'UNAVAILABLE' });
+    });
+
+    socket.on('push:subscribe', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s || !bucket.take()) return;
+      if (jsonSize(payload) > 4096) return ack({ ok: false, error: 'TOO_LARGE' });
+      ack((await push.subscribe(s.userId, (payload as { sub?: unknown } | null)?.sub)) ? { ok: true } : { ok: false, error: 'INVALID' });
+    });
+
+    socket.on('push:unsubscribe', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s) return;
+      await push.unsubscribe(s.userId, (payload as { endpoint?: unknown } | null)?.endpoint);
+      ack({ ok: true });
+    });
+
+    /** A message for someone whose app is closed: push "X sent you a message". */
+    socket.on('push:notify', async (payload: unknown, ackFn: unknown) => {
+      const ack = ackOf(ackFn);
+      const s = authed(ack);
+      if (!s) return;
+      const p = (payload ?? {}) as { to?: unknown; conv?: unknown; group?: unknown };
+      const to = p.to;
+      const conv = typeof p.conv === 'string' ? p.conv : '';
+      if (!isUserId(to) || to === s.userId) return ack({ ok: false, error: 'INVALID' });
+      // Only for a chat the sender is really part of: their direct chat, or a group they announced.
+      const dm = conv === (s.userId < to ? `dm:${s.userId}:${to}` : `dm:${to}:${s.userId}`);
+      const group = conv.startsWith('g:') && s.groups.has(conv.slice(2));
+      if (!dm && !group) return ack({ ok: false, error: 'INVALID' });
+      // Online: their app is running and shows its own notification.
+      if (sessions.has(to)) return ack({ ok: true, sent: 0, online: true });
+      const groupName = group ? str(p.group, 80)?.trim() || 'a group' : null;
+      ack({ ok: true, sent: await push.notify(s.userId, to, conv, groupName) });
     });
 
     /** "People on UR Chat": discoverable members to start a chat with (never suspended ones). */
@@ -609,6 +657,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
     inviteCount: () => invites.count(),
     relayStats: () => ({ enabled: opts.relayMbPerHour > 0, mbPerUserPerHour: opts.relayMbPerHour, mbLastHour: Math.round((relayedBytes / 1048576) * 10) / 10 }),
     /** Admin reset someone's likes and dislikes: tell them and everyone watching them right away. */
+    forgetPush: (userId: string) => push.forgetUser(userId),
     meterReset(userId: string, at: number) {
       const payload = { userId, at };
       emitTo(userId, 'meter:reset', payload);

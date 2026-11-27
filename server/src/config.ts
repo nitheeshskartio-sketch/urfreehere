@@ -86,6 +86,15 @@ export const config = {
    */
   relayMbPerHour: Number.isFinite(Number(env.RELAY_MB_PER_HOUR)) && env.RELAY_MB_PER_HOUR !== '' && env.RELAY_MB_PER_HOUR !== undefined ? Math.max(0, Number(env.RELAY_MB_PER_HOUR)) : 200,
 
+  /**
+   * Web Push (notifications while UR Chat is closed). Leave empty to have the
+   * server create keys once and keep them in MongoDB.
+   */
+  vapidPublicKey: env.VAPID_PUBLIC_KEY || '',
+  vapidPrivateKey: env.VAPID_PRIVATE_KEY || '',
+  /** Contact for push services (an https URL or mailto:). */
+  vapidSubject: env.VAPID_SUBJECT || 'https://urfreehere.onrender.com',
+
   chat: {
     /** MongoDB for UR Chat accounts (profiles only). Leave empty to run without accounts. */
     mongoUri: env.MONGODB_URI || '',
