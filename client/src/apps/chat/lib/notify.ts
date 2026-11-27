@@ -162,6 +162,9 @@ async function showNotification(title: string, options: NotificationOptions & { 
   };
 }
 
+/** The person isn't looking at UR Chat: minimised, another tab, or another window in front. */
+const away = () => document.visibilityState === 'hidden' || !document.hasFocus();
+
 /** Starts notifications for the chat engine. Returns a function that stops them. */
 export function startNotifications(engine: ChatEngine): () => void {
   let blinkTimer: number | undefined;
@@ -175,7 +178,7 @@ export function startNotifications(engine: ChatEngine): () => void {
     if (stopped) return;
     const count = engine.unreadTotal();
     setAppBadge(count);
-    const blinking = unseen && document.visibilityState === 'hidden' && count > 0;
+    const blinking = unseen && away() && count > 0;
     if (count === 0) {
       setIcon(originalHref);
       document.title = BASE_TITLE;
@@ -208,24 +211,26 @@ export function startNotifications(engine: ChatEngine): () => void {
   });
 
   const onVisibility = () => {
-    if (document.visibilityState === 'visible') {
+    if (!away()) {
       unseen = false;
       alertText = null;
     }
     void render();
   };
   document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('focus', onVisibility);
+  window.addEventListener('blur', onVisibility);
 
   const unsubscribeIncoming = engine.onIncoming((e: StoredEvent) => {
     const conv = engine.convs.get(e.conv);
     if (!conv || conv.muted) return;
     const fresh = Date.now() - e.ts < FRESH_MS;
-    const viewingIt = engine.activeConv === e.conv && document.visibilityState === 'visible';
+    const viewingIt = engine.activeConv === e.conv && !away();
     if (viewingIt || !fresh) return;
 
     const sender = engine.nameOf(e.author);
     const group = e.conv.startsWith('g:') ? engine.convTitle(conv) : null;
-    if (document.visibilityState === 'hidden') {
+    if (away()) {
       unseen = true;
       alertText = group ? `${sender} in ${group}` : `${sender} sent a message`;
     }
@@ -234,7 +239,7 @@ export function startNotifications(engine: ChatEngine): () => void {
 
     if (engine.settings.notificationSound) chime();
 
-    if (engine.settings.desktopNotifications && notificationsSupported() && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
+    if (engine.settings.desktopNotifications && notificationsSupported() && Notification.permission === 'granted' && away()) {
       const avatar = engine.profileOf(e.author)?.avatar;
       const url = `/chat/c/${encodeURIComponent(e.conv)}`;
       void showNotification(
@@ -265,6 +270,8 @@ export function startNotifications(engine: ChatEngine): () => void {
 
   return () => {
     navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+    window.removeEventListener('focus', onVisibility);
+    window.removeEventListener('blur', onVisibility);
     setAppBadge(0);
     stopped = true;
     unsubscribeState();

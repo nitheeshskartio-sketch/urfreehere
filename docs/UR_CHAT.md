@@ -201,7 +201,7 @@ Everyone is listed by default. **Settings → Privacy & data → Show me in "Peo
 
 ## Notifications and the app badge
 
-In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on desktop, Android, iOS 16.4+ when notifications are allowed) and clears when everything is read. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`). There's no push server, so the badge and notifications update only while the app is open or in the background, not after it's been closed.
+In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on Windows, macOS and ChromeOS, Android, iOS 16.4+ when notifications are allowed; Chrome doesn't support icon badges on Linux) and clears when everything is read. Notifications are shown whenever UR Chat isn't the focused window: minimised, in another tab, or behind another window. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`). There's no push server, so the badge and notifications update only while the app is open or in the background, not after it's been closed.
 
 ## Inactivity lock
 
