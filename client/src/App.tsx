@@ -1,7 +1,6 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { navigate, usePath } from './lib/router';
 import { SITE } from './site/config';
-import { CoffeeFab } from './site/coffee/CoffeeFab';
 import { AnnouncementBanner } from './site/Announcement';
 
 const ChatApp = lazy(() => import('./apps/chat/pages/ChatApp'));
@@ -40,8 +39,6 @@ export default function App() {
       <Suspense fallback={<div className="h-[100dvh] bg-surface" />}>
         <ChatApp path={clean} />
       </Suspense>
-      {/* Lifted above the compose box so it never covers it. */}
-      <CoffeeFab offset="chat" />
       <AnnouncementBanner />
     </>
   );

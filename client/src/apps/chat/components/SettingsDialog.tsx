@@ -72,6 +72,7 @@ function AppearanceSettings() {
           label="Text size"
           value={s.textSize}
           options={[
+            ['xs', 'Extra small'],
             ['sm', 'Small'],
             ['md', 'Medium'],
             ['lg', 'Large'],

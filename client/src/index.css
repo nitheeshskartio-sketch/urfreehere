@@ -72,6 +72,11 @@
   --chat-meta: 12px;
   --chat-name: 14px;
 }
+html[data-chat-text='xs'] {
+  --chat-text: 12px;
+  --chat-meta: 10.5px;
+  --chat-name: 12px;
+}
 html[data-chat-text='sm'] {
   --chat-text: 13px;
   --chat-meta: 11px;

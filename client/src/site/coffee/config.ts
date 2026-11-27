@@ -10,17 +10,7 @@ export const UPI = {
 /** UPI payment link (opens GPay, PhonePe, Paytm, …); the amount is left to the payer. */
 // The UPI ID is written as-is: some UPI apps don't decode "%40" in it.
 export const upiLink = () => `upi://pay?pa=${UPI.id}&cu=INR&tn=Donation`;
-const HIDE_KEY = 'urfree.coffee.hiddenUntil';
 const COUNT_KEY = 'urfree.coffee.count';
-
-export function fabHidden(): boolean {
-  return Number(localStorage.getItem(HIDE_KEY) || 0) > Date.now();
-}
-
-export function hideFabForDays(days: number) {
-  localStorage.setItem(HIDE_KEY, String(Date.now() + days * 86_400_000));
-  window.dispatchEvent(new Event('urfree:coffee'));
-}
 
 export function openCoffee() {
   window.dispatchEvent(new Event('urfree:coffee-open'));

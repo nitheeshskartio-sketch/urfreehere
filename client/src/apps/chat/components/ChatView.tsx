@@ -230,13 +230,11 @@ export function ChatView({
             />
           </MoodBadge>
           <span className="min-w-0">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[15px] font-semibold">{title}</span>
-              {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} />}
-            </span>
+            <span className="block truncate text-[15px] font-semibold">{title}</span>
             <span className="block truncate text-[12.5px] text-muted">{subtitle}</span>
           </span>
         </button>
+        {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} />}
         {canCall && (
           <button
             type="button"

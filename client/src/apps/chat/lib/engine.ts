@@ -98,7 +98,7 @@ const PURGE_AFTER_MISSING_MS = 24 * 60 * 60 * 1000;
 
 /** Real messages (not group operations, reactions or deletions). */
 export function isMessage(e: { kind: EventKind }) {
-  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter';
+  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter' && e.kind !== 'edit';
 }
 
 /** Applies text size, spacing and clock settings to the page. */
@@ -208,9 +208,11 @@ function validEvent(e: unknown): e is ChatEvent {
         (b.accuracy === undefined || (typeof b.accuracy === 'number' && b.accuracy >= 0))
       );
     case 'react':
-      return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
+      return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'like' || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
     case 'delete':
       return typeof b.target === 'string' && b.target.length <= 64;
+    case 'edit':
+      return typeof b.target === 'string' && b.target.length <= 64 && typeof b.text === 'string' && b.text.trim().length > 0 && b.text.length <= MAX_TEXT && Object.keys(b).length === 2;
     case 'skip':
     case 'hug':
     case 'slap':
@@ -338,6 +340,8 @@ export class ChatEngine {
   private reactions = new Map<string, Map<UserId, { r: Reaction | null; ts: number }>>();
   /** message id -> who deleted it for everyone, and when */
   private revocations = new Map<string, { author: UserId; ts: number }>();
+  /** message id -> latest edit (text) from whoever sent it; only the message's author counts */
+  private edits = new Map<string, { author: UserId; text: string; ts: number }>();
   /** promise id -> answers received (the first valid one counts) */
   private promiseReplies = new Map<string, { author: UserId; answer: PromiseAnswer; ts: number }[]>();
   /** conversation -> time of the other person's emoji I've already seen animate */
@@ -831,6 +835,9 @@ export class ChatEngine {
       if (!m) this.reactions.set(String(b.target), (m = new Map()));
       const cur = m.get(e.author);
       if (!cur || cur.ts <= e.ts) m.set(e.author, { r: (b.r as Reaction | null) ?? null, ts: e.ts });
+    } else if (e.kind === 'edit' && !e.local.deleted) {
+      const cur = this.edits.get(String(b.target));
+      if (!cur || cur.ts <= e.ts) this.edits.set(String(b.target), { author: e.author, text: String(b.text), ts: e.ts });
     } else if (e.kind === 'promise-reply' && !e.local.deleted) {
       const list = this.promiseReplies.get(String(b.target)) ?? [];
       list.push({ author: e.author, answer: b.answer as PromiseAnswer, ts: e.ts });
@@ -890,7 +897,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.expired && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter');
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.expired && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter' && e.kind !== 'edit');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -995,7 +1002,7 @@ export class ChatEngine {
     const b = e.body as Record<string, unknown>;
     switch (e.kind) {
       case 'text':
-        return String(b.text);
+        return this.textOf(e);
       case 'image':
         return b.caption ? `Photo: ${b.caption}` : 'Photo';
       case 'file':
@@ -2213,15 +2220,44 @@ export class ChatEngine {
   // ------------------------------------------------------------ reactions
 
   /** Counts per reaction and my own, for a message. */
-  reactionsOf(id: string): { counts: Record<Reaction, number>; mine: Reaction | null } {
-    const counts: Record<Reaction, number> = { love: 0, broken: 0, slap: 0 };
+  reactionsOf(id: string): { counts: Record<Reaction, number>; who: Record<Reaction, UserId[]>; mine: Reaction | null } {
+    const counts: Record<Reaction, number> = { like: 0, love: 0, broken: 0, slap: 0 };
+    const who: Record<Reaction, UserId[]> = { like: [], love: [], broken: [], slap: [] };
     let mine: Reaction | null = null;
     for (const [author, v] of this.reactions.get(id) ?? []) {
       if (!v.r) continue;
       counts[v.r]++;
+      // Me first, then others in the order they reacted.
+      if (author === this.me) who[v.r].unshift(author);
+      else who[v.r].push(author);
       if (author === this.me) mine = v.r;
     }
-    return { counts, mine };
+    return { counts, who, mine };
+  }
+
+  // ------------------------------------------------------------- edits
+
+  /** A text message's current text (its author's latest edit, if any). */
+  textOf(e: StoredEvent): string {
+    const ed = this.edits.get(e.id);
+    return ed && ed.author === e.author ? ed.text : String((e.body as Record<string, unknown>).text ?? '');
+  }
+
+  isEdited(e: StoredEvent): boolean {
+    return this.edits.get(e.id)?.author === e.author;
+  }
+
+  /** Only my own normal text messages can be edited (not secret, view-once or deleted ones). */
+  canEdit(e: StoredEvent): boolean {
+    return e.author === this.me && e.kind === 'text' && !e.local.revoked && !e.local.expired && !e.body.viewOnce;
+  }
+
+  async editMessage(e: StoredEvent, text: string) {
+    const t = text.trim();
+    if (!this.canEdit(e) || !t || t === this.textOf(e)) return;
+    const err = this.canPost(e.conv);
+    if (err) return this.toast(err, 'error');
+    await this.publish(await this.makeEvent(e.conv, 'edit', { target: e.id, text: t.slice(0, MAX_TEXT) }));
   }
 
   // ------------------------------------------------------------ voice calls

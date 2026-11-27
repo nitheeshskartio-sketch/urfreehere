@@ -4,6 +4,7 @@ import { Link } from '../../../site/Link';
 import { SiteMark } from '../../../site/Logo';
 import { Button } from '../../../ui/Button';
 import { ThemeToggle } from '../../../ui/ThemeToggle';
+import { CoffeeButton } from '../../../site/coffee/CoffeeButton';
 import { navigate } from '../../../lib/router';
 import { engine } from '../lib/engine';
 import { normalizeLoginCode } from '../lib/identity';
@@ -71,6 +72,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
           <span className="text-[15px] font-semibold tracking-tight">Humble</span>
         </Link>
         <div className="flex items-center gap-1">
+        <CoffeeButton />
         <ThemeToggle />
         {step === 'login' ? (
           <Button variant="ghost" size="sm" onClick={() => setStep('welcome')}>

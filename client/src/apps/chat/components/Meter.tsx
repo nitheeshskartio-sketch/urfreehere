@@ -95,14 +95,27 @@ export function ProfileMeter({ peer, canTap }: { peer: UserId; canTap: boolean }
   );
 }
 
-/** Like / dislike counts shown right after a contact's name: what they gave me. */
+/** Like / dislike capsule on the right of the chat header: what they gave me. */
 export function MeterInline({ peer }: { peer: UserId }) {
   const e = useEngine();
   const m = e.meterOf(peer, peer);
+  const first = e.nameOf(peer).split(' ')[0];
   return (
-    <span className="inline-flex shrink-0 items-center gap-2 text-[12.5px] font-semibold tabular-nums" title={`${e.nameOf(peer).split(' ')[0]} gave you ${m.likes} likes and ${m.dislikes} dislikes`}>
-      <span className="text-success">👍 {fmt(m.likes)}</span>
-      <span className="text-danger">👎 {fmt(m.dislikes)}</span>
+    <span
+      className="mr-1 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-full border border-line bg-surface text-[12px] font-semibold tabular-nums shadow-sm"
+      title={`${first} gave you ${m.likes} likes and ${m.dislikes} dislikes`}
+      aria-label={`${first} gave you ${m.likes} likes and ${m.dislikes} dislikes`}
+      role="img"
+    >
+      <span className="flex items-center gap-1 px-2.5 text-success">
+        <ThumbsUp className="size-3.5" />
+        {fmt(m.likes)}
+      </span>
+      <span className="h-4 w-px bg-line" aria-hidden />
+      <span className="flex items-center gap-1 px-2.5 text-danger">
+        <ThumbsDown className="size-3.5" />
+        {fmt(m.dislikes)}
+      </span>
     </span>
   );
 }

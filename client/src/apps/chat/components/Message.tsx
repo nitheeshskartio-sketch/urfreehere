@@ -1,4 +1,4 @@
-import { Ban, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
+import { Ban, Check, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Pencil, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatBytes } from '../../../lib/format';
 import { GestureCard, PromiseCard } from './Promise';
@@ -32,7 +32,9 @@ export function Message({
   const e = useEngine();
   const mine = event.author === e.me;
   const body = event.body as Record<string, unknown>;
-  const text = event.kind === 'text' ? String(body.text) : '';
+  const text = event.kind === 'text' ? e.textOf(event) : '';
+  const edited = event.kind === 'text' && e.isEdited(event);
+  const [editing, setEditing] = useState(false);
   const bigEmoji = event.kind === 'text' && isEmojiOnly(text);
   const replied = e.event(event.replyTo);
   const profile = e.profileOf(event.author);
@@ -66,6 +68,7 @@ export function Message({
   const noCopy = event.kind === 'image' || event.kind === 'gif' || event.kind === 'hug' || event.kind === 'slap' || event.kind === 'voice' || viewOnce || (secret && !revealed) || revoked;
   const menuItems = [
     { label: 'Reply', icon: Reply, onSelect: () => onReply(event), hidden: revoked },
+    { label: 'Edit', icon: Pencil, onSelect: () => setEditing(true), hidden: !e.canEdit(event) },
     { label: 'Copy', icon: Copy, onSelect: copy, hidden: noCopy },
     {
       label: `Delete for everyone (${Math.ceil(windowLeft / 1000)}s)`,
@@ -116,11 +119,21 @@ export function Message({
               ) : (
               <SecretCover active={secret} revealed={revealed} onReveal={() => setRevealed(true)} onHide={() => setRevealed(false)} media={media}>
               {event.kind === 'text' &&
-                (bigEmoji ? (
+                (editing ? (
+                  <EditBox
+                    initial={text}
+                    onCancel={() => setEditing(false)}
+                    onSave={(t) => {
+                      setEditing(false);
+                      void e.editMessage(event, t);
+                    }}
+                  />
+                ) : bigEmoji ? (
                   <p className="text-4xl leading-tight">{text}</p>
                 ) : (
                   <p className="chat-text whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{linkify(text)}</p>
                 ))}
+              {edited && !editing && !revoked && <span className="chat-meta mt-0.5 block text-right italic text-muted">edited</span>}
               {event.kind === 'image' && <ImageContent body={body as unknown as FileBody} onOpen={onOpenImage} />}
               {event.kind === 'file' && <FileContent body={body as unknown as FileBody} />}
               {event.kind === 'location' && <LocationContent body={body as unknown as LocationBody} />}
@@ -188,22 +201,39 @@ export function Message({
         </div>
         {!revoked && REACTIONS.some((r) => reactions.counts[r.id] > 0) && (
           <div className={`-mt-1.5 flex flex-wrap gap-1 px-1 ${mine ? 'mr-5 justify-end' : 'ml-1'}`}>
-            {REACTIONS.filter((r) => reactions.counts[r.id] > 0).map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => react(r.id)}
-                aria-pressed={reactions.mine === r.id}
-                aria-label={`${r.label}: ${reactions.counts[r.id]}${reactions.mine === r.id ? ', including you' : ''}`}
-                title={reactions.mine === r.id ? `You reacted with ${r.label.toLowerCase()} (click to remove)` : `React with ${r.label.toLowerCase()}`}
-                className={`relative z-[1] inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[12px] font-medium shadow-sm ${
-                  reactions.mine === r.id ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel text-ink-soft hover:border-accent/50'
-                }`}
-              >
-                <span className="text-[13px] leading-none">{r.emoji}</span>
-                {reactions.counts[r.id]}
-              </button>
-            ))}
+            {REACTIONS.filter((r) => reactions.counts[r.id] > 0).map((r) => {
+              // Who reacted, shown on the chip: "You", or first names.
+              const names = reactions.who[r.id].map((u) => (u === e.me ? 'You' : e.nameOf(u).split(' ')[0]));
+              const label = names.length <= 2 ? names.join(' & ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => react(r.id)}
+                  aria-pressed={reactions.mine === r.id}
+                  aria-label={`${r.label} from ${names.join(', ')}${reactions.mine === r.id ? '. Click to remove yours' : ''}`}
+                  title={`${r.emoji} ${names.join(', ')}${reactions.mine === r.id ? ' (click to remove yours)' : ''}`}
+                  className={`relative z-[1] inline-flex h-6 max-w-[220px] items-center gap-1.5 rounded-full border px-2 text-[12px] font-medium shadow-sm ${
+                    reactions.mine === r.id ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel text-ink-soft hover:border-accent/50'
+                  }`}
+                >
+                  <span className="text-[13px] leading-none">{r.emoji}</span>
+                  <span className="flex -space-x-1" aria-hidden>
+                    {reactions.who[r.id].slice(0, 3).map((u) => (
+                      <Avatar
+                        key={u}
+                        avatar={u === e.me ? e.profile?.avatar : e.profileOf(u)?.avatar}
+                        name={u === e.me ? e.profile?.name ?? '' : e.nameOf(u)}
+                        seed={u}
+                        size={16}
+                        className="rounded-full ring-1 ring-panel"
+                      />
+                    ))}
+                  </span>
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -512,6 +542,39 @@ function ViewOnceViewer({ snapshot, onClose }: { snapshot: ViewOnceSnapshot; onC
             </a>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Edits a sent text in place. Enter saves, Escape cancels. */
+function EditBox({ initial, onSave, onCancel }: { initial: string; onSave: (text: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState(initial);
+  return (
+    <div className="min-w-[220px]">
+      <textarea
+        autoFocus
+        value={value}
+        onChange={(ev) => setValue(ev.target.value)}
+        onKeyDown={(ev) => {
+          if (ev.key === 'Escape') onCancel();
+          if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            if (value.trim()) onSave(value);
+          }
+        }}
+        rows={Math.min(6, Math.max(1, value.split('\n').length))}
+        maxLength={8000}
+        aria-label="Edit message"
+        className="chat-text w-full resize-none rounded border border-accent bg-panel px-2 py-1 focus:outline-none"
+      />
+      <div className="mt-1 flex justify-end gap-1">
+        <button type="button" onClick={onCancel} className="rounded p-1 text-muted hover:bg-subtle hover:text-ink" aria-label="Cancel editing">
+          <X className="size-4" />
+        </button>
+        <button type="button" onClick={() => value.trim() && onSave(value)} className="rounded p-1 text-accent hover:bg-accent-soft" aria-label="Save edit">
+          <Check className="size-4" />
+        </button>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { SiteMark } from '../../../site/Logo';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { ThemeToggle } from '../../../ui/ThemeToggle';
 import { InstallButton } from '../../../ui/InstallButton';
+import { CoffeeButton } from '../../../site/coffee/CoffeeButton';
 import { useEngine } from '../hooks';
 
 /** Teams-style title bar: product name, search, theme switch and your profile. */
@@ -57,6 +58,7 @@ export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: 
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
         <InstallButton compact />
+        <CoffeeButton />
         <ThemeToggle />
         <button type="button" onClick={onProfile} className="rounded-full p-0.5 hover:bg-subtle" aria-label={`Profile and settings (${status})`} title={`${me.name} · ${status}`}>
           <Avatar avatar={me.avatar} name={me.name} seed={e.me} size={30} online={e.net === 'online'} />

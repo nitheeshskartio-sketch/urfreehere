@@ -59,10 +59,11 @@ export interface Conversation {
 
 /**
  * skip: stands in for a message that was never delivered and was purged (keeps the sequence gap-free).
+ * edit: new text for one of the author's own text messages (latest wins).
  * voice: a voice call started in this chat (body: the call's room code).
  * hug / slap: full-screen gestures. meter: like/dislike totals. promise / promise-reply: a promise request and its Yes / No / cancel answer.
  */
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'slap' | 'promise' | 'promise-reply' | 'meter' | 'voice';
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'slap' | 'promise' | 'promise-reply' | 'meter' | 'voice' | 'edit';
 
 /** Full-screen gestures between two people. */
 export type Gesture = 'hug' | 'slap';
@@ -87,8 +88,9 @@ export interface PromiseStatus {
 export const MOODS = ['😍', '❤️', '🥰', '😊', '🤩', '🥺', '🤝', '😂', '😎', '🤗', '😐', '😴', '😔', '😢', '😡', '💔', '🥶', '🔥', '🙏', '🤔'];
 
 /** Message reactions: one per person per message. */
-export type Reaction = 'love' | 'broken' | 'slap';
+export type Reaction = 'like' | 'love' | 'broken' | 'slap';
 export const REACTIONS: { id: Reaction; emoji: string; label: string }[] = [
+  { id: 'like', emoji: '👍', label: 'Like' },
   { id: 'love', emoji: '❤️', label: 'Love' },
   { id: 'broken', emoji: '💔', label: 'Broken heart' },
   { id: 'slap', emoji: '🖐️', label: 'Slap' },
@@ -174,7 +176,7 @@ export interface Settings {
   /** Play a short sound for new messages. */
   notificationSound: boolean;
   /** Message text size. */
-  textSize: 'sm' | 'md' | 'lg' | 'xl';
+  textSize: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   /** Space between and inside messages. */
   density: 'comfortable' | 'compact';
   /** Clock style for message times. */
