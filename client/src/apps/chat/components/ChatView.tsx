@@ -8,6 +8,7 @@ import {
   Eraser,
   Hand,
   Heart,
+  Phone,
   Info,
   LoaderCircle,
   Pin,
@@ -31,6 +32,7 @@ import { deleteChatPrompt } from './deleteChat';
 import { MoodBadge, MoodButton } from './Mood';
 import { MeterInline } from './Meter';
 import { HugOverlay, SlapOverlay } from './Effects';
+import { openCall, useCall } from './VoiceCall';
 import type { Gesture } from '../lib/types';
 import { PromiseBar } from './Promise';
 import { emitBlast } from '../lib/engine';
@@ -66,6 +68,20 @@ export function ChatView({
   const contact = conv.peerId ? e.contacts.get(conv.peerId) : undefined;
   const canPost = isGroup ? !!group?.members.has(e.me) && !group.deleted && !conv.joining : contact?.state !== 'blocked';
   const twoPerson = !isGroup && !self && !!conv.peerId && contact?.state === 'contact';
+
+  // Voice calls: in direct chats with contacts and in groups I'm part of.
+  const canCall = canPost && !self && (isGroup ? !!group?.valid : contact?.state === 'contact');
+  const current = useCall();
+  const inCallHere = current?.conv === conv.id;
+  const [calling, setCalling] = useState(false);
+  const startCall = async () => {
+    if (current?.conv === conv.id) return openCall(current.conv, current.code, current.title);
+    if (current) return e.toast("You're already in a call. Leave it first.", 'error');
+    setCalling(true);
+    const code = await e.startVoiceCall(conv.id);
+    setCalling(false);
+    if (code) openCall(conv.id, code, title);
+  };
   const openPromise = twoPerson ? e.openPromise(conv.id) : null;
 
   // Hugs and slaps: full screen when sent, and for the receiver the first time they see it.
@@ -157,7 +173,7 @@ export function ChatView({
           <span title="They're online, but a connection couldn't be made. Usually one of the networks blocks direct connections.">online · can't connect</span>
         ) : 'offline'}
         {st === 'connected' && route === 'server' && (
-          <span className="inline-flex items-center gap-1 text-muted" title="A direct connection isn't possible on this network, so messages are passed on by the UR Free Here server. It doesn't store them.">
+          <span className="inline-flex items-center gap-1 text-muted" title="A direct connection isn't possible on this network, so messages are passed on by the Humble server. It doesn't store them.">
             · <Server className="size-3" /> via server
           </span>
         )}
@@ -221,6 +237,18 @@ export function ChatView({
             <span className="block truncate text-[12.5px] text-muted">{subtitle}</span>
           </span>
         </button>
+        {canCall && (
+          <button
+            type="button"
+            onClick={() => void startCall()}
+            disabled={calling}
+            className={`rounded-md p-2 hover:bg-surface hover:text-ink disabled:opacity-50 ${inCallHere ? 'text-success' : 'text-muted'}`}
+            aria-label={inCallHere ? 'Return to the call' : 'Start a voice call'}
+            title={inCallHere ? 'Return to the call' : 'Voice call'}
+          >
+            <Phone className="size-5" />
+          </button>
+        )}
         {!isGroup && !self && conv.peerId && canPost && contact?.state === 'contact' && <MoodButton peer={conv.peerId} />}
         {isGroup && e.isAdmin(conv.groupId!) && !group?.deleted && (
           <button type="button" onClick={onInvite} className="hidden rounded-md p-2 text-muted hover:bg-surface hover:text-ink sm:block" aria-label="Invite people" title="Invite people">

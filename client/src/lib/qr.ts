@@ -39,7 +39,7 @@ export type ScanTarget =
 
 const ID_RE = /^[A-Z2-9]{16}$/;
 
-/** Understands UR Chat contact links, group invite links and bare codes. */
+/** Understands Humble contact links, group invite links and bare codes. */
 export function parseScan(raw: string): ScanTarget | null {
   const text = raw.trim();
   const user = text.match(/\/chat\/u\/([A-Za-z0-9-]+)/);

@@ -2,7 +2,7 @@ import { MongoClient, type Collection } from 'mongodb';
 import type { PublicJwk } from './identity.js';
 
 /**
- * UR Chat accounts in MongoDB: profile and basic details only.
+ * Humble accounts in MongoDB: profile and basic details only.
  * Messages, chat history and files are never stored here.
  *
  * Inactive accounts are removed by MongoDB itself through a TTL index on
@@ -32,7 +32,7 @@ export interface AccountDoc {
   links?: AccountLinks;
   /** Set by the admin: likes and dislikes this person received before this time no longer count. */
   meterResetAt?: Date;
-  /** Listed in other people's "People on UR Chat" suggestions. Missing means yes. */
+  /** Listed in other people's "People on Humble" suggestions. Missing means yes. */
   discoverable?: boolean;
 }
 

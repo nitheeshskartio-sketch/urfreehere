@@ -59,9 +59,10 @@ export interface Conversation {
 
 /**
  * skip: stands in for a message that was never delivered and was purged (keeps the sequence gap-free).
+ * voice: a voice call started in this chat (body: the call's room code).
  * hug / slap: full-screen gestures. meter: like/dislike totals. promise / promise-reply: a promise request and its Yes / No / cancel answer.
  */
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'slap' | 'promise' | 'promise-reply' | 'meter';
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'slap' | 'promise' | 'promise-reply' | 'meter' | 'voice';
 
 /** Full-screen gestures between two people. */
 export type Gesture = 'hug' | 'slap';

@@ -1,14 +1,15 @@
-# UR Free Here: site structure, theme and adding apps
+# Humble: structure, theme and the installable app
+
+Humble is the whole site: the chat app at `/chat` (every other address opens it) and the admin console at `/admin`. The earlier multi-app site (UR Postman, the standalone Mic pages and the home page) has been removed; Mic's voice rooms now power voice calls inside chats.
 
 ```
 client/src/
-  theme/tokens.css      Universal design tokens (colours, radii, shadows, fonts, layout)
-  ui/                   Shared UI kit: Button, Panel, Notice, ProgressBar, StatusSteps, QRCode…
-  site/                 Site shell: config (name), SiteHeader, SiteFooter, Logo, Link
-  pages/                Site pages: Home (/), NotFound
-  apps/registry.tsx     List of apps: name, path, icon, nav, and whether they are listed
-  apps/postman/         UR Postman (pages, hooks, lib, components)
-  App.tsx               Routes
+  theme/tokens.css      Design tokens (colours, radii, shadows, fonts, layout)
+  ui/                   Shared UI kit: Button, Modal, QRCode, Avatar, InstallButton…
+  site/                 Name and tagline (config.ts), the bee logo (Logo.tsx), coffee popup, announcement
+  apps/chat/            The Humble app
+  apps/mic/             Voice-room engine and call screen
+  App.tsx               Routes: /chat (+ /join/…), /admin; everything else redirects to /chat
 ```
 
 ## Universal theme

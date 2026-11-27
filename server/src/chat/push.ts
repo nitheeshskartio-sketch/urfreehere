@@ -5,7 +5,7 @@ import { WindowLimiter } from '../rateLimit.js';
 import type { AccountStore } from './accounts.js';
 
 /**
- * Web Push for UR Chat: tells someone "X sent you a message" while their app
+ * Web Push for Humble: tells someone "X sent you a message" while their app
  * is closed. Messages themselves still travel device to device; the push has
  * no message text, only who wrote and in which chat.
  *

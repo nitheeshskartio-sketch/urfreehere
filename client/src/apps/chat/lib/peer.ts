@@ -14,7 +14,7 @@ export interface ChatSession {
   readonly createdAt: number;
   /** Conversations we've already asked this peer to sync during this connection. */
   readonly asked: Set<string>;
-  /** Forwarded by the UR Free Here server instead of a WebRTC connection. */
+  /** Forwarded by the Humble server instead of a WebRTC connection. */
   readonly viaServer: boolean;
   /** Largest binary chunk to send in one message. */
   readonly maxChunk: number;

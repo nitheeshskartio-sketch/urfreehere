@@ -118,7 +118,7 @@ Rooms and rate-limit counters live **in memory**, so:
 
 Restarting the server drops rooms still waiting for a receiver (users see an error and can create a new code). Transfers already running continue, because they don't depend on the server.
 
-## 6. UR Chat data
+## 6. Humble data
 
 **Accounts (MongoDB):** set `MONGODB_URI` (and optionally `MONGODB_DB`, `ACCOUNT_INACTIVE_DAYS`) as environment variables or in `.env`. Never commit the connection string. In MongoDB Atlas:
 
@@ -129,7 +129,7 @@ The server creates the `inactive_ttl` index at startup.
 
 **Invites:**
 
-UR Chat stores **only invitation metadata** on the server: token, short code, group preview, expiry, usage count, and pending join requests. It goes in `CHAT_DATA_FILE`, default `data/chat-invites.json`, so invite links survive restarts. In Docker, mount a volume at `/app/data`. Messages and files are never stored on the server.
+Humble stores **only invitation metadata** on the server: token, short code, group preview, expiry, usage count, and pending join requests. It goes in `CHAT_DATA_FILE`, default `data/chat-invites.json`, so invite links survive restarts. In Docker, mount a volume at `/app/data`. Messages and files are never stored on the server.
 
 ## 7. Production checklist
 
@@ -140,5 +140,5 @@ UR Chat stores **only invitation metadata** on the server: token, short code, gr
 - [ ] `GET /healthz` wired to your uptime monitor
 - [ ] Access logs at the proxy don't retain more than you need. Share links contain room codes, which expire after 30 minutes.
 - [ ] `MONGODB_URI` set from a secret store (not committed); Atlas network access limited to the server's IP
-- [ ] `data/` (UR Chat invites) on persistent storage and included in backups if invite links must survive server loss
+- [ ] `data/` (Humble invites) on persistent storage and included in backups if invite links must survive server loss
 - [ ] Test a transfer between two different networks (e.g. phone on mobile data and laptop on Wi‑Fi), and with `ICE_TRANSPORT_POLICY=relay` once

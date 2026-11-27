@@ -1,7 +1,7 @@
 import { drawScaled, toDataUrl } from '../../../ui/avatar/image';
 
 export { makeAvatarImage } from '../../../ui/avatar/image';
-/** File types UR Chat sends and accepts. Anything else is refused on both sides. */
+/** File types Humble sends and accepts. Anything else is refused on both sides. */
 export const IMAGE_TYPES: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',

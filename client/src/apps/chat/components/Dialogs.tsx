@@ -31,13 +31,13 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     const id = parseUserId(value);
-    if (!id) return setError('Enter a 16-character chat ID or paste a UR Chat link.');
+    if (!id) return setError('Enter a 16-character chat ID or paste a Humble link.');
     if (id !== e.me && !e.convs.has(`dm:${[e.me, id].sort().join(':')}`)) {
       setChecking(true);
       const { enabled, found } = await e.lookupUsers([id]);
       setChecking(false);
       if (enabled && !found.has(id)) {
-        return setError('No UR Chat account uses this ID. Check it, or the account may have been removed after 7 days without activity.');
+        return setError('No Humble account uses this ID. Check it, or the account may have been removed after 7 days without activity.');
       }
     }
     const conv = e.startDirectChat(id);
@@ -95,7 +95,7 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
         </div>
         {showMine ? (
           <div className="mt-4">
-            <ShareCard link={userLink(e.me)} qrName="my-ur-chat-qr" shareTitle={`Chat with ${e.profile?.name} on UR Chat`} />
+            <ShareCard link={userLink(e.me)} qrName="my-ur-chat-qr" shareTitle={`Chat with ${e.profile?.name} on Humble`} />
           </div>
         ) : (
           <Button variant="ghost" size="sm" className="mt-3 -ml-2" onClick={() => setShowMine(true)}>
@@ -107,7 +107,7 @@ export function NewChatDialog({ onClose, onOpen, onScan }: { onClose: () => void
   );
 }
 
-/** "People on UR Chat": members you haven't chatted with yet. Your first message reaches them as a chat request. */
+/** "People on Humble": members you haven't chatted with yet. Your first message reaches them as a chat request. */
 function PeopleSuggestions({ onStart }: { onStart: (id: string) => void }) {
   const e = useEngine();
   const [q, setQ] = useState('');
@@ -126,7 +126,7 @@ function PeopleSuggestions({ onStart }: { onStart: (id: string) => void }) {
 
   return (
     <div className="border-t border-line p-4 sm:p-5">
-      <p className="text-[13px] font-medium text-ink-soft">People on UR Chat</p>
+      <p className="text-[13px] font-medium text-ink-soft">People on Humble</p>
       <p className="mt-0.5 text-[12px] text-muted">Members you haven't chatted with yet. Your first message reaches them as a chat request.</p>
       <label className="relative mt-2.5 block">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
@@ -378,7 +378,7 @@ export function ScanDialog({ onClose, onResult }: { onClose: () => void; onResul
       if (!raw) return false;
       const target = parseScan(raw);
       if (!target) {
-        setHint("That QR code isn't a UR Chat contact or group invitation.");
+        setHint("That QR code isn't a Humble contact or group invitation.");
         return false;
       }
       onResult(target);
@@ -452,7 +452,7 @@ export function ScanDialog({ onClose, onResult }: { onClose: () => void; onResul
             <Camera className="absolute left-3 top-3 size-4 text-white/70" />
           </div>
         )}
-        <p className="text-center text-sm text-muted">{hint || 'Point the camera at a UR Chat contact or group QR code.'}</p>
+        <p className="text-center text-sm text-muted">{hint || 'Point the camera at a Humble contact or group QR code.'}</p>
         <Button variant="secondary" className="w-full" onClick={() => fileRef.current?.click()}>
           <ImageUp />
           Scan from a photo
@@ -525,7 +525,7 @@ export function InviteDialog({ groupId, onClose }: { groupId: string; onClose: (
               code={formatInviteCode(current.code)}
               codeLabel="Invitation code"
               qrName={`${(g?.name ?? 'group').replace(/[^\w-]+/g, '-').toLowerCase()}-invite`}
-              shareTitle={`Join ${g?.name} on UR Chat`}
+              shareTitle={`Join ${g?.name} on Humble`}
             />
             <p className="text-[12.5px] text-muted">
               {current.expiresAt ? `Expires ${new Date(current.expiresAt).toLocaleString()}` : 'Does not expire'} ·{' '}

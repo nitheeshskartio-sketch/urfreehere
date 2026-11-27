@@ -97,7 +97,7 @@ function ContactInfo({ conv }: { conv: Conversation }) {
           <p className="mt-2 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
             <Server className="mt-0.5 size-4 shrink-0" />
             {route === 'server'
-              ? "A direct connection isn't possible on this network, so messages and files are passed on by the UR Free Here server. It doesn't store them. Every message is still signed by its sender and checked here."
+              ? "A direct connection isn't possible on this network, so messages and files are passed on by the Humble server. It doesn't store them. Every message is still signed by its sender and checked here."
               : route === 'relay'
                 ? 'Connected through a relay server because a direct path was blocked. The relay forwards encrypted data it cannot read.'
                 : 'Connected directly, peer to peer.'}

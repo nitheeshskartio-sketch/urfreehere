@@ -1,4 +1,4 @@
-import { ArrowLeftRight, House, MessageSquare, Mic, Search, Settings, X } from 'lucide-react';
+import { MessageSquare, Search, Settings, X } from 'lucide-react';
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { AdminLoginDialog } from '../../../admin/AdminLogin';
 import { navigate } from '../../../lib/router';
@@ -21,8 +21,8 @@ export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: 
     ev.preventDefault();
     window.clearTimeout(clickTimer.current);
     if (ev.detail >= 2) return setAdminOpen(true);
-    if (ev.detail === 0) return navigate('/'); // keyboard
-    clickTimer.current = window.setTimeout(() => navigate('/'), 280);
+    if (ev.detail === 0) return navigate('/chat'); // keyboard
+    clickTimer.current = window.setTimeout(() => navigate('/chat'), 280);
   };
   const status = e.net === 'online' ? 'Available' : e.net === 'connecting' ? 'Connecting…' : e.net === 'replaced' ? 'Open in another tab' : 'Offline';
   return (
@@ -36,9 +36,9 @@ export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: 
           }}
         />
       )}
-      <a href="/" onClick={onLogo} className="flex shrink-0 select-none items-center gap-2 rounded-md md:w-[56px] md:justify-center lg:w-auto" aria-label="UR Free Here home">
+      <a href="/chat" onClick={onLogo} className="flex shrink-0 select-none items-center gap-2 rounded-md md:w-[56px] md:justify-center lg:w-auto" aria-label="Humble">
         <SiteMark className="size-6" />
-        <span className="text-[14px] font-semibold md:hidden lg:inline">UR Chat</span>
+        <span className="text-[14px] font-semibold md:hidden lg:inline">Humble</span>
       </a>
       <div className="relative mx-auto hidden w-full max-w-[560px] md:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
@@ -66,7 +66,7 @@ export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: 
   );
 }
 
-function RailItem({ href, icon: Icon, label, active, onClick }: { href?: string; icon: typeof House; label: string; active?: boolean; onClick?: () => void }) {
+function RailItem({ href, icon: Icon, label, active, onClick }: { href?: string; icon: typeof MessageSquare; label: string; active?: boolean; onClick?: () => void }) {
   const inner = (
     <>
       {active && <span className="absolute left-0 top-1/2 h-8 w-[3px] -translate-y-1/2 rounded-r bg-accent" aria-hidden="true" />}
@@ -88,14 +88,11 @@ function RailItem({ href, icon: Icon, label, active, onClick }: { href?: string;
   );
 }
 
-/** Teams-style left app rail linking the UR Free Here apps. */
+/** Teams-style left rail. */
 export function AppRail({ onSettings }: { onSettings: () => void }) {
   return (
     <nav className="hidden w-[68px] shrink-0 flex-col bg-rail md:flex" aria-label="Apps">
       <RailItem href="/chat" icon={MessageSquare} label="Chat" active />
-      <RailItem href="/mic" icon={Mic} label="Mic" />
-      <RailItem href="/postman" icon={ArrowLeftRight} label="Postman" />
-      <RailItem href="/" icon={House} label="Home" />
       <div className="mt-auto">
         <RailItem icon={Settings} label="Settings" onClick={onSettings} />
       </div>

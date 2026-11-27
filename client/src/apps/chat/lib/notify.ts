@@ -12,7 +12,7 @@ import type { StoredEvent } from './types';
  * (more than 2 minutes old) update the badge but don't pop up or play a sound.
  */
 
-const BASE_TITLE = 'UR Chat';
+const BASE_TITLE = 'Humble';
 const FRESH_MS = 2 * 60 * 1000;
 const BLINK_MS = 900;
 
@@ -34,7 +34,7 @@ export async function enableDesktopNotifications(engine: ChatEngine): Promise<No
 
 let baseIcon: HTMLImageElement | null = null;
 let iconLink: HTMLLinkElement | null = null;
-let originalHref = '/favicon.svg';
+let originalHref = '/bee.svg';
 const iconCache = new Map<string, string>();
 
 function faviconLink(): HTMLLinkElement {
@@ -45,7 +45,7 @@ function faviconLink(): HTMLLinkElement {
     iconLink.rel = 'icon';
     document.head.appendChild(iconLink);
   }
-  originalHref = iconLink.getAttribute('href') || '/favicon.svg';
+  originalHref = iconLink.getAttribute('href') || '/bee.svg';
   return iconLink;
 }
 
@@ -154,7 +154,7 @@ function setAppBadge(count: number) {
 /** Shows a notification, through the service worker when there is one (required on Android). */
 async function showNotification(title: string, options: NotificationOptions & { data: { url: string } }, onClick: () => void) {
   const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration().catch(() => undefined) : undefined;
-  if (reg?.active) return reg.showNotification(title, { ...options, badge: '/icons/icon-192.png' });
+  if (reg?.active) return reg.showNotification(title, { ...options, badge: '/icons/bee-192.png' });
   const n = new Notification(title, options);
   n.onclick = () => {
     onClick();
@@ -162,7 +162,7 @@ async function showNotification(title: string, options: NotificationOptions & { 
   };
 }
 
-/** The person isn't looking at UR Chat: minimised, another tab, or another window in front. */
+/** The person isn't looking at Humble: minimised, another tab, or another window in front. */
 const away = () => document.visibilityState === 'hidden' || !document.hasFocus();
 
 /** Starts notifications for the chat engine. Returns a function that stops them. */
@@ -246,7 +246,7 @@ export function startNotifications(engine: ChatEngine): () => void {
         group ? `${sender} in ${group}` : sender,
         {
           body: engine.settings.notificationPreview ? engine.describe(e).slice(0, 160) : 'New message',
-          icon: avatar?.startsWith('data:image/') ? avatar : '/icons/icon-192.png',
+          icon: avatar?.startsWith('data:image/') ? avatar : '/icons/bee-192.png',
           tag: e.conv, // one notification per conversation, replaced by newer ones
           silent: true, // we play our own sound
           data: { url },

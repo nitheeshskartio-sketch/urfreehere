@@ -5,7 +5,6 @@ import type { AccountDoc, AccountStore } from './chat/accounts.js';
 import { isUserId } from './chat/identity.js';
 import { gifStats, resetGifBudget } from './gif.js';
 import { WindowLimiter } from './rateLimit.js';
-import type { RoomRegistry } from './rooms.js';
 import { applySettings, bannedIds, publicSettings, settings, type SiteSettings } from './settings.js';
 
 /**
@@ -46,7 +45,6 @@ export interface AdminOptions {
   accounts: Promise<AccountStore> | null;
   chat: ChatAdmin;
   mic: MicAdmin;
-  postman: RoomRegistry;
 }
 
 const IDLE_MS = 2 * 60 * 60 * 1000;
@@ -172,7 +170,6 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
       },
       chat: { online: opts.chat.onlineCount(), groupsOnline: opts.chat.onlineGroups(), invites: opts.chat.inviteCount(), relay: opts.chat.relayStats() },
       mic: { rooms: micRooms.length, people: micRooms.reduce((n, r) => n + r.participantCount, 0) },
-      postman: opts.postman.stats(),
       gif: gifStats(),
       settings,
     });
@@ -318,7 +315,7 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
     const b = (req.body ?? {}) as Partial<SiteSettings>;
     if (b.announcement && typeof b.announcement === 'object') b.announcement = { ...b.announcement, updatedAt: Date.now() };
     applySettings(b);
-    const names = { signupsOpen: 'new accounts', gifsEnabled: 'GIFs', micCreateEnabled: 'new Mic rooms', postmanEnabled: 'Postman transfers' } as const;
+    const names = { signupsOpen: 'new accounts', gifsEnabled: 'GIFs', micCreateEnabled: 'new voice calls' } as const;
     let changed = false;
     for (const k of Object.keys(names) as (keyof typeof names)[]) {
       if (settings[k] !== before[k]) {

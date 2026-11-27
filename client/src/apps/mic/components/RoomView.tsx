@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   Copy,
   Crown,
   EllipsisVertical,
@@ -8,6 +9,7 @@ import {
   LogOut,
   Mic,
   MicOff,
+  Phone,
   RotateCcw,
   Settings2,
   UserMinus,
@@ -23,7 +25,6 @@ import { Field, Modal, inputClass } from '../../../ui/Modal';
 import { ShareCard } from '../../../ui/ShareCard';
 import { ThemeToggle } from '../../../ui/ThemeToggle';
 import { Avatar } from '../../../ui/avatar/Avatar';
-import { MicIcon } from '../../registry';
 import { useRoom } from '../hooks';
 import { canChooseOutput } from '../lib/audio';
 import { statusOf, type Participant, type RoomClient } from '../lib/room';
@@ -37,7 +38,11 @@ function layout(n: number): { grid: string; size: CardSize } {
   return { grid: 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5', size: 'sm' };
 }
 
-export function RoomView({ client, config }: { client: RoomClient; config: MicConfig | null }) {
+/**
+ * A voice room. In a chat call (`call`), people join from the chat, so the room
+ * code and invitation links are hidden and there's a way back to the chat.
+ */
+export function RoomView({ client, config, call }: { client: RoomClient; config: MicConfig | null; call?: { title: string; onMinimize: () => void } }) {
   const c = useRoom(client);
   const room = c.room!;
   const [panel, setPanel] = useState(false);
@@ -61,16 +66,27 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
     <div className="flex h-[100dvh] flex-col bg-surface">
       {/* Header */}
       <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-panel px-3 sm:px-5">
-        <MicIcon className="size-8 shrink-0" />
+        {call ? (
+          <button type="button" onClick={call.onMinimize} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Back to chat" title="Back to chat (the call continues)">
+            <ArrowLeft className="size-5" />
+          </button>
+        ) : null}
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-white">
+          <Phone className="size-4" />
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-[15px] font-semibold">{room.name}</h1>
+            <h1 className="truncate text-[15px] font-semibold">{call ? call.title : room.name}</h1>
             {room.locked && <Lock className="size-3.5 shrink-0 text-muted" aria-label="Locked" />}
           </div>
           <div className="flex items-center gap-2 text-[12.5px] text-muted">
-            <button type="button" onClick={copy} className="font-mono font-medium tracking-wider hover:text-ink" title="Copy invitation link">
-              {room.code}
-            </button>
+            {call ? (
+              <span>Voice call</span>
+            ) : (
+              <button type="button" onClick={copy} className="font-mono font-medium tracking-wider hover:text-ink" title="Copy invitation link">
+                {room.code}
+              </button>
+            )}
             <span aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1 tabular">
               <Users className="size-3.5" />
@@ -85,12 +101,16 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
             </span>
           </div>
         </div>
-        <button type="button" onClick={copy} className="hidden rounded-md p-2 text-muted hover:bg-surface hover:text-ink sm:block" aria-label="Copy invitation" title="Copy invitation">
-          <Copy className="size-5" />
-        </button>
-        <button type="button" onClick={() => setInvite(true)} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Invite participants" title="Invite">
-          <UserPlus className="size-5" />
-        </button>
+        {!call && (
+          <>
+            <button type="button" onClick={copy} className="hidden rounded-md p-2 text-muted hover:bg-surface hover:text-ink sm:block" aria-label="Copy invitation" title="Copy invitation">
+              <Copy className="size-5" />
+            </button>
+            <button type="button" onClick={() => setInvite(true)} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Invite participants" title="Invite">
+              <UserPlus className="size-5" />
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={() => setPanel((p) => !p)}
@@ -121,10 +141,16 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
           </div>
           {people.length === 1 && (
             <div className="mx-auto mt-6 max-w-sm rounded-xl border border-line bg-panel px-5 py-4 text-center text-sm text-muted shadow-card">
-              You're the only one here.{' '}
-              <button type="button" onClick={() => setInvite(true)} className="font-medium text-accent hover:underline">
-                Invite people
-              </button>
+              {call ? (
+                'Calling… Everyone in the chat can join from the call message.'
+              ) : (
+                <>
+                  You're the only one here.{' '}
+                  <button type="button" onClick={() => setInvite(true)} className="font-medium text-accent hover:underline">
+                    Invite people
+                  </button>
+                </>
+              )}
             </div>
           )}
         </main>
@@ -185,7 +211,7 @@ export function RoomView({ client, config }: { client: RoomClient; config: MicCo
       {invite && (
         <Modal title="Invite people" onClose={() => setInvite(false)}>
           <div className="p-4 sm:p-5">
-            <ShareCard link={link} code={room.code} codeLabel="Room code" qrName={`mic-${room.code}`} shareTitle={`Join "${room.name}" on Mic`} />
+            <ShareCard link={link} code={room.code} codeLabel="Room code" qrName={`mic-${room.code}`} shareTitle={`Join "${room.name}" on Humble`} />
           </div>
         </Modal>
       )}

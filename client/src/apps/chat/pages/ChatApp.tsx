@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, Info, LoaderCircle, LockKeyhole, MessagesSqua
 import { Button } from '../../../ui/Button';
 import { Avatar } from '../../../ui/avatar/Avatar';
 import { BlastHost } from '../components/Effects';
+import { IncomingCallPrompt, VoiceCallLayer } from '../components/VoiceCall';
 import { IdleLock } from '../components/IdleLock';
 import { LoginCodeDialog } from '../components/LoginCode';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -53,7 +54,7 @@ export default function ChatApp({ path }: { path: string }) {
   }, []);
 
   useEffect(() => {
-    document.title = 'UR Chat';
+    document.title = 'Humble';
   }, []);
 
   // Tab badge, desktop notifications and sound for new messages.
@@ -103,7 +104,7 @@ export default function ChatApp({ path }: { path: string }) {
       <div className="flex h-[100dvh] items-center justify-center bg-surface p-6">
         <div className="max-w-sm rounded-xl border border-line bg-panel p-6 text-center shadow-card">
           <CircleAlert className="mx-auto size-8 text-danger" />
-          <h1 className="mt-3 text-lg font-semibold">{e.status === 'unsupported' ? 'Browser not supported' : "UR Chat couldn't start"}</h1>
+          <h1 className="mt-3 text-lg font-semibold">{e.status === 'unsupported' ? 'Browser not supported' : "Humble couldn't start"}</h1>
           <p className="mt-2 text-sm text-muted">
             {e.status === 'unsupported'
               ? `This browser is missing ${e.unsupportedReason.join(', ')}. Use a recent Chrome, Edge, Firefox or Safari.`
@@ -132,7 +133,7 @@ export default function ChatApp({ path }: { path: string }) {
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {banned
               ? "The site admin suspended this chat ID, so it can't connect. Your chats are still on this device."
-              : "UR Chat isn't accepting new accounts right now. Your profile is saved on this device. Try again later."}
+              : "Humble isn't accepting new accounts right now. Your profile is saved on this device. Try again later."}
           </p>
           {!banned && (
             <Button className="mt-5 w-full" onClick={() => engine.retryConnection()}>
@@ -152,7 +153,7 @@ export default function ChatApp({ path }: { path: string }) {
           </span>
           <h1 className="mt-4 text-lg font-semibold">Signed in on another device</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Your login code was used to sign in somewhere else. UR Chat works on one device at a time, so this device was signed out and its chats were removed.
+            Your login code was used to sign in somewhere else. Humble works on one device at a time, so this device was signed out and its chats were removed.
           </p>
           <p className="mt-2 text-sm leading-relaxed text-muted">If that wasn't you, sign in again with your login code right away.</p>
           <Button className="mt-5 w-full" onClick={() => window.location.assign('/chat/login')}>
@@ -176,7 +177,7 @@ export default function ChatApp({ path }: { path: string }) {
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {e.removedByAdmin
               ? 'Your account was removed by the site admin. Your chats are still on this device. Reactivate to keep the same chat ID and profile.'
-              : 'UR Chat accounts are removed after 7 days without activity. Your chats are still on this device. Reactivate to keep the same chat ID and profile.'}
+              : 'Humble accounts are removed after 7 days without activity. Your chats are still on this device. Reactivate to keep the same chat ID and profile.'}
           </p>
           <div className="mt-6 flex flex-col gap-2">
             <Button onClick={() => engine.reactivate()}>Reactivate my account</Button>
@@ -217,7 +218,7 @@ export default function ChatApp({ path }: { path: string }) {
           <span className="flex size-16 items-center justify-center rounded-2xl bg-panel text-accent shadow-card">
             <MessagesSquare className="size-8" />
           </span>
-          <h1 className="mt-5 text-xl font-semibold tracking-tight">UR Chat</h1>
+          <h1 className="mt-5 text-xl font-semibold tracking-tight">Humble</h1>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">Pick a conversation, or start a new one with someone's chat ID, link or QR code.</p>
           <p className="mt-8 flex items-center gap-2 text-[12.5px] text-muted">
             <LockKeyhole className="size-3.5" />
@@ -268,6 +269,8 @@ export default function ChatApp({ path }: { path: string }) {
       )}
       <Toasts />
       <BlastHost />
+      <VoiceCallLayer />
+      <IncomingCallPrompt />
       <IdleLock enabled={e.settings.idleLock} />
     </div>
   );

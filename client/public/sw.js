@@ -1,4 +1,4 @@
-// UR Free Here service worker: makes the site installable and lets it open offline.
+// Humble service worker: makes the site installable and lets it open offline.
 // Chats, files and settings already live on the device (IndexedDB); this only
 // caches the app itself. Live traffic (/api, /socket.io) is never touched.
 //
@@ -6,7 +6,7 @@
 // fresh cache and old files are cleaned up.
 const VERSION = '__BUILD__';
 const CACHE = `urfree-${VERSION}`;
-const SHELL = ['/', '/theme-init.js', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const SHELL = ['/', '/theme-init.js', '/bee.svg', '/manifest.webmanifest', '/icons/bee-192.png', '/icons/bee-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -104,7 +104,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// --- Web Push: "X sent you a message" while UR Chat is closed -----------------
+// --- Web Push: "X sent you a message" while Humble is closed -----------------
 // The push carries who wrote and in which chat, never the message itself.
 // Unread pushes are counted for the app icon badge until the app opens.
 
@@ -124,7 +124,7 @@ self.addEventListener('push', (event) => {
   } catch {
     /* not JSON */
   }
-  const title = data.title || 'UR Chat';
+  const title = data.title || 'Humble';
   const url = typeof data.url === 'string' && data.url.startsWith('/chat') ? data.url : '/chat';
   event.waitUntil(
     (async () => {
@@ -137,8 +137,8 @@ self.addEventListener('push', (event) => {
         body: data.body || 'New message',
         tag: data.tag || url,
         renotify: true,
-        icon: '/icons/icon-192.png',
-        badge: '/icons/icon-192.png',
+        icon: '/icons/bee-192.png',
+        badge: '/icons/bee-192.png',
         data: { url },
       });
     })(),

@@ -44,7 +44,6 @@ interface Settings {
   signupsOpen: boolean;
   gifsEnabled: boolean;
   micCreateEnabled: boolean;
-  postmanEnabled: boolean;
   announcement: { text: string; tone: 'info' | 'warning' | 'success'; updatedAt: number } | null;
 }
 
@@ -53,7 +52,6 @@ interface Overview {
   accounts: { mode: 'connected' | 'starting' | 'error' | 'disabled'; inactiveDays: number; total?: number; new24h?: number; new7d?: number; active24h?: number; banned: number };
   chat: { online: number; groupsOnline: number; invites: number; relay?: { enabled: boolean; mbPerUserPerHour: number; mbLastHour: number } };
   mic: { rooms: number; people: number };
-  postman: { total: number; waiting: number; paired: number };
   gif: { configured: boolean; used: number; limit: number; cached: number; unauthorized: boolean; upstreamLimited: boolean };
   settings: Settings;
 }
@@ -101,7 +99,7 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: Gauge },
   { id: 'profiles', label: 'Profiles', icon: Users },
   { id: 'suspended', label: 'Suspended', icon: Ban },
-  { id: 'mic', label: 'Mic rooms', icon: Mic },
+  { id: 'mic', label: 'Voice calls', icon: Mic },
   { id: 'controls', label: 'Controls', icon: SlidersHorizontal },
   { id: 'announcement', label: 'Announcement', icon: Megaphone },
   { id: 'log', label: 'Activity log', icon: Activity },
@@ -158,7 +156,7 @@ export default function AdminPage() {
         <div className="w-full max-w-sm rounded-xl border border-line bg-panel p-6 shadow-card">
           <AdminLoginForm onSuccess={() => setAuthed(true)} />
           <Link href="/chat" className="mt-4 block text-center text-[13px] text-muted hover:text-ink">
-            Back to UR Chat
+            Back to Humble
           </Link>
         </div>
       </div>
@@ -168,7 +166,7 @@ export default function AdminPage() {
   return (
     <div className="flex h-[100dvh] flex-col bg-surface text-ink">
       <header className="flex h-12 shrink-0 items-center gap-3 bg-rail px-3">
-        <Link href="/chat" className="rounded-md p-1.5 text-muted hover:bg-subtle hover:text-ink" aria-label="Back to UR Chat">
+        <Link href="/chat" className="rounded-md p-1.5 text-muted hover:bg-subtle hover:text-ink" aria-label="Back to Humble">
           <ArrowLeft className="size-4" />
         </Link>
         <SiteMark className="size-6" />
@@ -341,7 +339,7 @@ function OverviewSection({ onGo }: { onGo: (s: Section) => void }) {
   if (!data) return <ErrorBox error={error} onRetry={() => void reload()} />;
   const a = data.accounts;
   const s = data.settings;
-  const off = [!s.signupsOpen && 'sign-ups', !s.gifsEnabled && 'GIFs', !s.micCreateEnabled && 'new Mic rooms', !s.postmanEnabled && 'Postman'].filter(Boolean);
+  const off = [!s.signupsOpen && 'sign-ups', !s.gifsEnabled && 'GIFs', !s.micCreateEnabled && 'new voice calls'].filter(Boolean);
   return (
     <>
       <Heading
@@ -365,8 +363,7 @@ function OverviewSection({ onGo }: { onGo: (s: Section) => void }) {
           detail={a.mode === 'connected' ? `+${a.new24h} today · +${a.new7d} this week · ${a.active24h} active today` : a.mode === 'disabled' ? 'MongoDB not configured' : `Database ${a.mode}`}
           onClick={() => onGo('profiles')}
         />
-        <Stat icon={Mic} label="Mic rooms" value={data.mic.rooms} detail={`${data.mic.people} people talking`} onClick={() => onGo('mic')} />
-        <Stat icon={RefreshCw} label="Postman transfers" value={data.postman.total} detail={`${data.postman.paired} connected · ${data.postman.waiting} waiting`} />
+        <Stat icon={Mic} label="Voice calls" value={data.mic.rooms} detail={`${data.mic.people} people talking`} onClick={() => onGo('mic')} />
         <Stat icon={Ban} label="Suspended IDs" value={a.banned} onClick={() => onGo('suspended')} />
         <Stat
           icon={ImageOff}
@@ -431,7 +428,7 @@ function ProfilesSection({ notify }: { notify: Notify }) {
     <>
       <Heading
         title="Profiles"
-        sub={data ? `${data.total} profile${data.total === 1 ? '' : 's'}${query ? ` matching "${query}"` : ''}` : 'UR Chat accounts stored in MongoDB'}
+        sub={data ? `${data.total} profile${data.total === 1 ? '' : 's'}${query ? ` matching "${query}"` : ''}` : 'Humble accounts stored in MongoDB'}
         actions={
           <Button variant="danger" size="sm" onClick={() => setPurgeOpen(true)}>
             <Trash2 /> Delete inactive…
@@ -762,7 +759,7 @@ function MicSection({ notify }: { notify: Notify }) {
   };
   return (
     <>
-      <Heading title="Mic rooms" sub="Live voice rooms and who is in them. Refreshes every 5 seconds. Audio never passes through the server." />
+      <Heading title="Voice calls" sub="Calls going on in chats right now and who is in them. Refreshes every 5 seconds. Audio never passes through the server." />
       {error ? (
         <ErrorBox error={error} onRetry={() => void reload()} />
       ) : loading && !data ? (
@@ -849,10 +846,9 @@ function ControlsSection({ notify }: { notify: Notify }) {
       <Heading title="Controls" sub="Switch features on or off for everyone, right away. Saved across restarts when MongoDB is configured." />
       <Card>
         <div className="divide-y divide-line">
-          <Switch checked={s.signupsOpen} onChange={toggle('signupsOpen', 'Sign-ups')} label="New UR Chat accounts" description="When off, nobody can create a new account. People who already have one keep using UR Chat." />
+          <Switch checked={s.signupsOpen} onChange={toggle('signupsOpen', 'Sign-ups')} label="New Humble accounts" description="When off, nobody can create a new account. People who already have one keep using Humble." />
           <Switch checked={s.gifsEnabled} onChange={toggle('gifsEnabled', 'GIFs')} label="GIFs and stickers" description="When off, the GIF and sticker tabs say they're switched off. GIFs already sent still show." />
-          <Switch checked={s.micCreateEnabled} onChange={toggle('micCreateEnabled', 'New Mic rooms')} label="Creating Mic rooms" description="When off, no new voice rooms can be created. Rooms already open keep working." />
-          <Switch checked={s.postmanEnabled} onChange={toggle('postmanEnabled', 'Postman')} label="UR Postman transfers" description="When off, nobody can start a new file transfer. Transfers in progress finish." />
+          <Switch checked={s.micCreateEnabled} onChange={toggle('micCreateEnabled', 'New voice calls')} label="Starting voice calls" description="When off, nobody can start a new call in a chat. Calls already going on keep working." />
         </div>
       </Card>
       <Card className="mt-4">
@@ -914,7 +910,7 @@ function AnnouncementSection({ notify }: { notify: Notify }) {
   const toneCls = TONES.find((t) => t.id === tone)!.cls;
   return (
     <>
-      <Heading title="Announcement" sub="A message shown to every visitor on every page (UR Chat, Mic, Postman and the site), until they dismiss it." />
+      <Heading title="Announcement" sub="A message shown to everyone using Humble, until they dismiss it." />
       <Card>
         <label className="block">
           <span className="mb-1.5 block text-[13px] font-medium">Message</span>

@@ -9,7 +9,7 @@ export function currentTheme(): Theme {
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 }
 
-/** Applies and remembers a theme for every UR Free Here app. */
+/** Applies and remembers a theme for every Humble app. */
 export function setTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
   try {

@@ -139,7 +139,7 @@ function NotificationToggles() {
               ? "Blocked in this browser. Allow notifications for this site in your browser's settings."
               : busy
                 ? 'Waiting for your browser…'
-                : 'Show a notification for new messages while UR Chat is in the background.'
+                : 'Show a notification for new messages while Humble is in the background.'
         }
       />
       <Toggle
@@ -241,7 +241,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
           <p className="text-[13px] leading-relaxed text-muted">
             Share your ID, link or QR code with people you want to chat with. Your ID comes from a key created on this device, so nobody else can use it.
           </p>
-          <ShareCard link={userLink(e.me)} qrName="my-ur-chat-qr" shareTitle={`Chat with ${p.name} on UR Chat`} />
+          <ShareCard link={userLink(e.me)} qrName="my-ur-chat-qr" shareTitle={`Chat with ${p.name} on Humble`} />
         </div>
       )}
 
@@ -281,13 +281,13 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
             checked={e.settings.idleLock}
             onChange={(v) => void e.updateSettings({ idleLock: v })}
             label="Lock after 20 seconds of inactivity"
-            hint="Blurs UR Chat behind a lock when you're away. Move or tap to continue."
+            hint="Blurs Humble behind a lock when you're away. Move or tap to continue."
           />
           {e.accountsEnabled && (
             <Toggle
               checked={e.discoverable}
               onChange={(v) => void e.setDiscoverable(v).catch((err: Error) => e.toast(err.message || "Couldn't change this. Try again.", 'error'))}
-              label="Show me in “People on UR Chat”"
+              label="Show me in “People on Humble”"
               hint="Other members can find your name and picture in New chat and send you a chat request."
             />
           )}
@@ -311,7 +311,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
               them permanently. There is no backup. Your login code restores your account and profile, not your chats.
             </p>
             <p className="text-[12.5px] text-muted">
-              Messages are signed by their author and encrypted in transit, but stored unencrypted on each participant's device. UR Chat does not yet offer separately
+              Messages are signed by their author and encrypted in transit, but stored unencrypted on each participant's device. Humble does not yet offer separately
               verified end-to-end encryption with key-safety numbers.
             </p>
           </div>

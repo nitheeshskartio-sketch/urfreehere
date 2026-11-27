@@ -71,7 +71,7 @@ const BASE: string = import.meta.env.VITE_SIGNALING_URL || '';
 const TIMEOUT = 10_000;
 
 /**
- * Connection to the UR Chat signaling hub. Carries presence, WebRTC
+ * Connection to the Humble signaling hub. Carries presence, WebRTC
  * handshakes and invitation requests, and relays frames for people who can't
  * connect directly (see relay.ts).
  */

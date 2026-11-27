@@ -44,7 +44,7 @@ Mitigations:
 
 ### Easiest: Cloudflare Realtime TURN (managed)
 
-TURN is optional for UR Chat: without it, people on strict networks (mobile data, some office or college Wi-Fi) fall back to UR Chat's built-in server relay (see [UR_CHAT.md](UR_CHAT.md)), which costs only your server's bandwidth. TURN gives them a direct WebRTC path instead, and is still needed for UR Postman and Mic on such networks. Cloudflare runs a managed TURN service with a free tier:
+TURN is optional for Humble: without it, people on strict networks (mobile data, some office or college Wi-Fi) fall back to Humble's built-in server relay (see [UR_CHAT.md](UR_CHAT.md)), which costs only your server's bandwidth. TURN gives them a direct WebRTC path instead, and is still needed for UR Postman and Mic on such networks. Cloudflare runs a managed TURN service with a free tier:
 
 1. In the Cloudflare dashboard go to **Realtime → TURN Server → Create**.
 2. Copy the **Turn Token ID** and the **API Token** into the server environment:

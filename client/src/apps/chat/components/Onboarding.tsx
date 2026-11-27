@@ -37,7 +37,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
         setRestoring(true);
         setStep('profile');
       } else if (result === 'offline') {
-        setLoginError("Couldn't reach UR Chat. Check your connection and try again.");
+        setLoginError("Couldn't reach Humble. Check your connection and try again.");
       }
       // 'found': the engine switches to the app.
     } catch {
@@ -68,7 +68,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
       <header className="flex h-14 items-center justify-between border-b border-line bg-panel px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 rounded-md">
           <SiteMark className="size-7" />
-          <span className="text-[15px] font-semibold tracking-tight">UR Chat</span>
+          <span className="text-[15px] font-semibold tracking-tight">Humble</span>
         </Link>
         <div className="flex items-center gap-1">
         <ThemeToggle />
@@ -93,7 +93,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
             </span>
             <h1 className="mt-5 text-2xl font-semibold tracking-tight">Chat directly, device to device</h1>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
-              Messages, photos and documents go straight between devices over encrypted peer-to-peer connections. No phone
+              Messages, photos, documents and voice calls go straight between devices over encrypted peer-to-peer connections. No phone
               number or email needed.
             </p>
             <ul className="mt-6 space-y-3.5 text-sm">
@@ -121,8 +121,8 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
         ) : step === 'login' ? (
           <form onSubmit={login} className="w-full max-w-[460px] rounded-xl border border-line bg-panel shadow-card" noValidate>
             <div className="border-b border-line px-6 py-5">
-              <h1 className="text-xl font-semibold tracking-tight">Sign in to UR Chat</h1>
-              <p className="mt-1 text-sm text-muted">Enter your login code to use your account on this device. Your profile, contacts and groups come back; earlier messages don't. UR Chat works on one device at a time, so your other device is signed out and its chats are removed.</p>
+              <h1 className="text-xl font-semibold tracking-tight">Sign in to Humble</h1>
+              <p className="mt-1 text-sm text-muted">Enter your login code to use your account on this device. Your profile, contacts and groups come back; earlier messages don't. Humble works on one device at a time, so your other device is signed out and its chats are removed.</p>
             </div>
             <div className="space-y-3 px-6 py-5">
               <Field label="Login code">
@@ -182,7 +182,7 @@ export function Onboarding({ initialStep = 'welcome' }: { initialStep?: 'welcome
                 />
               </Field>
               <Field label="Status (optional)">
-                <input className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)} maxLength={140} placeholder="Hey there! I'm using UR Chat" />
+                <input className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)} maxLength={140} placeholder="Hey there! I'm using Humble" />
               </Field>
               <div>
                 <span className="text-[13px] font-medium text-ink-soft">Profile picture (optional)</span>

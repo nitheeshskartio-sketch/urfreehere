@@ -3,7 +3,7 @@ import { WindowLimiter } from './rateLimit.js';
 import { settings } from './settings.js';
 
 /**
- * GIPHY proxy for UR Chat's GIF and sticker picker.
+ * GIPHY proxy for Humble's GIF and sticker picker.
  *
  * The API key stays on the server. All browsers share one GIPHY budget
  * (GIPHY_HOURLY_LIMIT calls per rolling hour, 100 for a beta key), so results

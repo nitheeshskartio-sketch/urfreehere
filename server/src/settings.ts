@@ -9,14 +9,12 @@ export interface Announcement {
 }
 
 export interface SiteSettings {
-  /** New UR Chat accounts can be created. Existing accounts keep working. */
+  /** New Humble accounts can be created. Existing accounts keep working. */
   signupsOpen: boolean;
-  /** GIF and sticker search in UR Chat. */
+  /** GIF and sticker search in Humble. */
   gifsEnabled: boolean;
-  /** New Mic rooms can be created. */
+  /** New voice calls can be started in chats. */
   micCreateEnabled: boolean;
-  /** New UR Postman transfers can be started. */
-  postmanEnabled: boolean;
   announcement: Announcement | null;
 }
 
@@ -24,21 +22,20 @@ export const settings: SiteSettings = {
   signupsOpen: true,
   gifsEnabled: true,
   micCreateEnabled: true,
-  postmanEnabled: true,
   announcement: null,
 };
 
-/** Suspended UR Chat IDs (loaded from MongoDB at start). */
+/** Suspended Humble IDs (loaded from MongoDB at start). */
 export const bannedIds = new Set<string>();
 
 /** What every visitor may see: the banner and which features are switched on. */
 export function publicSettings() {
-  const { announcement, gifsEnabled, micCreateEnabled, postmanEnabled, signupsOpen } = settings;
-  return { announcement, gifsEnabled, micCreateEnabled, postmanEnabled, signupsOpen };
+  const { announcement, gifsEnabled, micCreateEnabled, signupsOpen } = settings;
+  return { announcement, gifsEnabled, micCreateEnabled, signupsOpen };
 }
 
 export function applySettings(patch: Partial<SiteSettings>) {
-  for (const k of ['signupsOpen', 'gifsEnabled', 'micCreateEnabled', 'postmanEnabled'] as const) {
+  for (const k of ['signupsOpen', 'gifsEnabled', 'micCreateEnabled'] as const) {
     if (typeof patch[k] === 'boolean') settings[k] = patch[k]!;
   }
   if (patch.announcement === null) settings.announcement = null;

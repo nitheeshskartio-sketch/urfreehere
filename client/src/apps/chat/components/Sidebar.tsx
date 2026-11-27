@@ -138,7 +138,7 @@ export function Sidebar({
 
       {e.net === 'replaced' ? (
         <div className="mx-3 mb-2 flex items-center gap-3 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-[13px]">
-          <span className="flex-1 text-ink-soft">UR Chat is open in another tab.</span>
+          <span className="flex-1 text-ink-soft">Humble is open in another tab.</span>
           <Button size="sm" variant="secondary" onClick={() => e.reclaim()}>
             Use here
           </Button>

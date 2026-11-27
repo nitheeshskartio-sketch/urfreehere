@@ -12,7 +12,7 @@ export function SignOutDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <Modal
-      title="Sign out of UR Chat"
+      title="Sign out of Humble"
       onClose={onClose}
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

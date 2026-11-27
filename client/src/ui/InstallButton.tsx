@@ -72,7 +72,7 @@ export function InstallButton({ className = '', compact = false }: { className?:
         type="button"
         onClick={() => void install()}
         className={`flex items-center gap-1.5 rounded-md text-[13px] font-medium text-accent hover:bg-accent-soft ${compact ? 'p-2' : 'px-2.5 py-1.5'}`}
-        title="Install UR Free Here as an app"
+        title="Install Humble as an app"
         aria-label="Install app"
       >
         <Download className="size-4" />

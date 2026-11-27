@@ -1,9 +1,9 @@
 /** Site-wide identity. Rename the site here. */
 export const SITE = {
-  name: 'UR Free Here',
-  shortName: 'UR',
-  tagline: 'Free, private tools that run in your browser.',
+  name: 'Humble',
+  shortName: 'Humble',
+  tagline: 'Private chat and voice calls, device to device.',
   description:
-    'UR Free Here is a collection of simple browser apps with no ads and no tracking. No email or phone number needed, and your files and messages stay on your devices.',
+    'Humble is a private messenger: chats, photos and voice calls go directly between devices. No ads, no tracking, no phone number needed.',
   year: new Date().getFullYear(),
 };

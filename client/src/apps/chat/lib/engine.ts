@@ -215,6 +215,8 @@ function validEvent(e: unknown): e is ChatEvent {
     case 'hug':
     case 'slap':
       return Object.keys(b).length === 0;
+    case 'voice':
+      return typeof b.code === 'string' && /^MIC-[2-9A-HJ-KMNP-Z]{6}$/.test(b.code) && Object.keys(b).length === 1;
     case 'meter':
       return (
         x.conv.startsWith('dm:') &&
@@ -288,7 +290,7 @@ export class ChatEngine {
   private lastLinks = '';
   /** Browser features that are missing when status is "unsupported". */
   unsupportedReason: string[] = [];
-  /** Listed in other people's "People on UR Chat" suggestions. */
+  /** Listed in other people's "People on Humble" suggestions. */
   discoverable = true;
   /** Whether the server keeps accounts (MongoDB configured). */
   accountsEnabled = false;
@@ -1006,6 +1008,8 @@ export class ChatEngine {
         return '🤗 Virtual hug';
       case 'slap':
         return '🖐️ Virtual slap';
+      case 'voice':
+        return '📞 Voice call';
       case 'promise':
         return `🤞 Promise: ${String(b.text)}`;
       case 'op':
@@ -2218,6 +2222,44 @@ export class ChatEngine {
       if (author === this.me) mine = v.r;
     }
     return { counts, mine };
+  }
+
+  // ------------------------------------------------------------ voice calls
+
+  /**
+   * Starts a voice call in a chat: creates a private voice room sized for the
+   * chat and posts a "Voice call" message everyone in it can join from.
+   * Returns the room code, or null if it couldn't start.
+   */
+  async startVoiceCall(conv: ConvId): Promise<string | null> {
+    const err = this.canPost(conv) ?? this.promiseLockText(conv);
+    if (err) {
+      this.toast(err, 'error');
+      return null;
+    }
+    const c = this.convs.get(conv);
+    const people = c?.type === 'group' ? (this.group(c)?.members.size ?? 2) : 2;
+    const max = [2, 4, 6, 8, 10, 15, 20].find((n) => n >= people) ?? 20;
+    try {
+      const { RoomClient } = await import('../../mic/lib/room');
+      const res = await RoomClient.createRoom({
+        name: (c ? this.convTitle(c) : 'Voice call').slice(0, 60),
+        description: '',
+        maxParticipants: max,
+        visibility: 'private',
+        expiryMinutes: 120,
+      });
+      await this.publish(await this.makeEvent(conv, 'voice', { code: res.code }));
+      this.acceptIfRequest(conv);
+      return res.code;
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      this.toast(
+        code === 'DISABLED' ? 'Voice calls are switched off right now. Try again later.' : code === 'RATE_LIMITED' ? 'Too many calls started. Try again in a few minutes.' : "Couldn't start the call. Check your connection and try again.",
+        'error',
+      );
+      return null;
+    }
   }
 
   // ------------------------------------------------------------ hugs & promises

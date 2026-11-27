@@ -19,7 +19,7 @@ import { bannedIds, settings } from '../settings.js';
 import { PushService } from './push.js';
 
 /**
- * UR Chat signaling hub (Socket.IO namespace "/chat").
+ * Humble signaling hub (Socket.IO namespace "/chat").
  *
  * Responsibilities, and nothing more:
  *  - authenticate a socket as the owner of a chat ID (signed challenge)
@@ -375,7 +375,7 @@ export function attachChat(io: Server, app: Express, opts: ChatHubOptions) {
       ack({ ok: true, sent: await push.notify(s.userId, to, conv, groupName) });
     });
 
-    /** "People on UR Chat": discoverable members to start a chat with (never suspended ones). */
+    /** "People on Humble": discoverable members to start a chat with (never suspended ones). */
     socket.on('directory:suggest', async (payload: unknown, ackFn: unknown) => {
       const ack = ackOf(ackFn);
       const s = authed(ack);

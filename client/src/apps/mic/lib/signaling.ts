@@ -62,7 +62,8 @@ export class MicError extends Error {
 }
 
 export function connectMic(): Socket {
-  return io(`${BASE}/mic`, { reconnectionDelay: 800, reconnectionDelayMax: 5000, timeout: TIMEOUT });
+  // Its own connection: sharing the chat's (which starts with autoConnect off) would never connect.
+  return io(`${BASE}/mic`, { forceNew: true, reconnectionDelay: 800, reconnectionDelayMax: 5000, timeout: TIMEOUT });
 }
 
 export function request<T>(socket: Socket, event: string, payload: unknown): Promise<T> {
@@ -115,8 +116,8 @@ export const ERROR_COPY: Record<string, { title: string; message: string }> = {
   WRONG_PASSWORD: { title: 'Wrong password', message: "That password isn't right. Check it with the host." },
   BANNED: { title: "You can't rejoin yet", message: 'The host removed you from this room. You can try again later.' },
   RATE_LIMITED: { title: 'Too many attempts', message: 'Please wait a few minutes and try again.' },
-  UNREACHABLE: { title: "Can't reach Mic", message: 'Check your internet connection and try again.' },
-  SERVER_BUSY: { title: 'Mic is busy', message: 'Please try again in a moment.' },
-  DISABLED: { title: 'New rooms are paused', message: 'The site admin has paused creating Mic rooms. Existing rooms still work. Try again later.' },
+  UNREACHABLE: { title: "Can't reach the call service", message: 'Check your internet connection and try again.' },
+  SERVER_BUSY: { title: 'Calls are busy', message: 'Please try again in a moment.' },
+  DISABLED: { title: 'New calls are paused', message: 'The site admin has paused new voice calls. Calls already going on still work. Try again later.' },
   INVALID_LIMIT: { title: 'Participant limit not allowed', message: 'Choose a smaller participant limit.' },
 };

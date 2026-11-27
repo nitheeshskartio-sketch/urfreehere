@@ -1,8 +1,8 @@
-# UR Chat: architecture
+# Humble: architecture
 
-UR Chat is a peer-to-peer messenger at `/chat`, listed on the site home page via [client/src/apps/registry.tsx](../client/src/apps/registry.tsx).
+Humble is a peer-to-peer messenger at `/chat`, listed on the site home page via [client/src/apps/registry.tsx](../client/src/apps/registry.tsx).
 
-**Secure vs. local-network pages:** browsers only provide Web Crypto, geolocation and camera access on HTTPS or `localhost`. On plain-HTTP network addresses (e.g. `http://192.168.1.20:5173` while developing), UR Chat signs and verifies with the audited pure-JS `@noble/curves` and `@noble/hashes` instead. These are loaded only in that case, and the signatures are identical, so both kinds of page talk to each other. **Use my current location** and camera QR scanning stay unavailable there, while entering coordinates or a maps link and scanning a QR code from a photo still work. On an insecure page the private key is stored as raw bytes, not as a non-extractable `CryptoKey`; production must use HTTPS.
+**Secure vs. local-network pages:** browsers only provide Web Crypto, geolocation and camera access on HTTPS or `localhost`. On plain-HTTP network addresses (e.g. `http://192.168.1.20:5173` while developing), Humble signs and verifies with the audited pure-JS `@noble/curves` and `@noble/hashes` instead. These are loaded only in that case, and the signatures are identical, so both kinds of page talk to each other. **Use my current location** and camera QR scanning stay unavailable there, while entering coordinates or a maps link and scanning a QR code from a photo still work. On an insecure page the private key is stored as raw bytes, not as a non-extractable `CryptoKey`; production must use HTTPS.
 
 ```
  Browser A ══════ WebRTC DataChannels (DTLS) ══════ Browser B          messages, receipts, typing,
@@ -109,6 +109,10 @@ Every message is a signed **event**:
 
 Every account has a chat with itself, pinned at the top as "Name (You)", like Teams. Notes, links, photos, documents, GIFs and locations sent there are **stored only on this device**: nothing is sent to peers or to the server, and the chat never notifies. Messages show as read (blue double tick) as soon as they're saved. It's a direct-chat ID with the same user on both sides (`dm:<me>:<me>`), which peers can never write to (direct-chat events require two different participants). Entering your own ID in **New chat** opens it.
 
+## Voice calls
+
+The 📞 button in a direct chat (with a contact) or a group starts a voice call: a private voice room sized for the chat (see [MIC.md](MIC.md)) and a "Voice call" message (`kind: 'voice'`, body `{ code }`). Everyone in the chat sees an "… is calling" prompt and can join from it or from the message, which shows "Ended" once the room is gone. One call runs at a time for the whole app, so moving between chats doesn't hang up; **Back to chat** minimises it to a bar with a leave button. The admin console's **Starting voice calls** switch turns new calls off.
+
 ## Secret and view-once messages
 
 **Right-click the Send button** (long-press on touch screens) for:
@@ -134,8 +138,8 @@ The Settings tabs are Profile, **Appearance**, **Notifications**, Your chat ID, 
 
 These work like Teams, for **new messages** only. Muted conversations never notify. Messages older than 2 minutes, for example ones caught up after reconnecting, update the counts but don't pop up or play a sound.
 
-- **Tab badge:** a red circle with the unread count is drawn onto the tab icon, and the title becomes `(3) UR Chat`. While the tab is in the background and a new message arrives, the badge **blinks** and the title alternates with "Priya sent a message" (or "Priya in Product team"). Both stop when you return.
-- **Desktop notifications:** sender, group and message preview, one per conversation (newer ones replace older ones). Clicking one opens the conversation. They're only shown while UR Chat is in the background, and they need permission, asked through the "Get notified" prompt or Settings. They need HTTPS.
+- **Tab badge:** a red circle with the unread count is drawn onto the tab icon, and the title becomes `(3) Humble`. While the tab is in the background and a new message arrives, the badge **blinks** and the title alternates with "Priya sent a message" (or "Priya in Product team"). Both stop when you return.
+- **Desktop notifications:** sender, group and message preview, one per conversation (newer ones replace older ones). Clicking one opens the conversation. They're only shown while Humble is in the background, and they need permission, asked through the "Get notified" prompt or Settings. They need HTTPS.
 - **Sound:** a short generated two-tone chime.
 - **Settings:** Desktop notifications, Show message preview, and Notification sound.
 - Messages aren't marked read, and no read receipts are sent, while the tab is in the background. That happens when you come back.
@@ -193,27 +197,27 @@ Messages, photos, files, hugs, slaps, promises and reactions are removed from ev
 
 Each device sweeps at start and every 5 minutes, and expires anything older that arrives from a peer straight away. An expired event becomes a content-free tombstone (`local.expired`, body `{}`, its photo or file deleted) that keeps its author and sequence number. Gap-free sync asks the other side for every missing number, so the last sync reply also carries `expired` ranges per author (`{ author: [[from, to], …] }`). The receiver counts those numbers as received and saves them (`expiredSeqs` in IndexedDB), so it never keeps asking for messages that no longer exist anywhere.
 
-## People on UR Chat (suggestions)
+## People on Humble (suggestions)
 
-**New chat** lists **People on UR Chat**: discoverable members you have no chat with yet, most recently active first, searchable by name. **Message** opens a chat, and your first message reaches them as a chat request, as with a chat ID. The server answers `directory:suggest` with public profiles (name, status, picture, public key) from MongoDB, leaving out you, your contacts and suspended accounts. It's rate-limited per user, and each key is checked against its chat ID before it's used.
+**New chat** lists **People on Humble**: discoverable members you have no chat with yet, most recently active first, searchable by name. **Message** opens a chat, and your first message reaches them as a chat request, as with a chat ID. The server answers `directory:suggest` with public profiles (name, status, picture, public key) from MongoDB, leaving out you, your contacts and suspended accounts. It's rate-limited per user, and each key is checked against its chat ID before it's used.
 
-Everyone is listed by default. **Settings → Privacy & data → Show me in "People on UR Chat"** turns it off (`discoverable: false` on the account).
+Everyone is listed by default. **Settings → Privacy & data → Show me in "People on Humble"** turns it off (`discoverable: false` on the account).
 
 ## Notifications and the app badge
 
-In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on Windows, macOS and ChromeOS, Android, iOS 16.4+ when notifications are allowed; Chrome doesn't support icon badges on Linux) and clears when everything is read. Notifications are shown whenever UR Chat isn't the focused window: minimised, in another tab, or behind another window. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`).
+In the installed app, the unread count shows on the app icon (Badging API: Chrome and Edge on Windows, macOS and ChromeOS, Android, iOS 16.4+ when notifications are allowed; Chrome doesn't support icon badges on Linux) and clears when everything is read. Notifications are shown whenever Humble isn't the focused window: minimised, in another tab, or behind another window. Message notifications go through the service worker when one is running (Android only allows that), with the favicon tab badge and sound as before. Tapping a notification focuses the app and opens that chat (`notificationclick` in `sw.js` posts `{ type: 'open', url }`).
 
 **While the app is closed: Web Push.** With desktop notifications on, the device subscribes to Web Push (`push:subscribe`). The server's VAPID keys come from `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`, or are created once and kept in MongoDB (`site_settings` "vapid"). Subscriptions live in `push_subs` ([server/src/chat/push.ts](../server/src/chat/push.ts)).
 
 - After each burst of messages, the sender's device sends `push:notify` (recipient + chat). The server pushes only if the recipient has no live connection (the app is closed), and only for a chat the sender belongs to: their direct chat, or a group they announced. It's limited to one push per sender, recipient and chat every 20 s, and 60 per sender per hour.
 - The push says "Alex: Sent you a message" (or "… in Group"). It carries no message text, because the server never has messages; the message itself arrives when both devices are online.
-- The service worker shows the notification unless UR Chat is open and in front, counts unread pushes on the app icon (`urfree-meta` cache), and resets the count when the app opens. Tapping opens that chat.
+- The service worker shows the notification unless Humble is open and in front, counts unread pushes on the app icon (`urfree-meta` cache), and resets the count when the app opens. Tapping opens that chat.
 - Signing in with the login code on another device, or deleting the account, removes the old subscriptions.
 - iPhone and iPad get push only for the installed app (iOS 16.4+). Chrome on Linux shows notifications but no icon badge.
 
 ## Inactivity lock
 
-After 20 seconds without activity, UR Chat blurs behind a lock button. It also locks when you come back to a tab that was hidden for 20 seconds or more. Any mouse movement, tap, key or scroll brings it straight back, exactly where you were. It's a privacy screen, not a password lock. It's on by default, and **Settings → Privacy & data → Lock after 20 seconds of inactivity** turns it off.
+After 20 seconds without activity, Humble blurs behind a lock button. It also locks when you come back to a tab that was hidden for 20 seconds or more. Any mouse movement, tap, key or scroll brings it straight back, exactly where you were. It's a privacy screen, not a password lock. It's on by default, and **Settings → Privacy & data → Lock after 20 seconds of inactivity** turns it off.
 
 ## Unsent messages
 
@@ -242,7 +246,7 @@ Some networks (mobile data, some office or college Wi-Fi) block every direct Web
 | Rate limits | Connections, invite lookups, joins and invite creation per IP or user; signals per socket. |
 | Rendering | Text is rendered as text; only `http(s)` URLs become links (`rel="noopener noreferrer nofollow"`). |
 
-**Not claimed:** UR Chat does not advertise end-to-end encryption. Content is encrypted in transit on every hop and authenticated per author, but it is stored unencrypted on participants' devices, and there are no safety-number verification screens or forward-secret message keys at the application layer. Those would be the next step before such a claim.
+**Not claimed:** Humble does not advertise end-to-end encryption. Content is encrypted in transit on every hop and authenticated per author, but it is stored unencrypted on participants' devices, and there are no safety-number verification screens or forward-secret message keys at the application layer. Those would be the next step before such a claim.
 
 **Known limits:** presence is visible to anyone who knows your ID. One active tab per identity (another tab can take over with "Use here"). Delivery needs both sides online at the same time.
 
@@ -251,7 +255,7 @@ Some networks (mobile data, some office or college Wi-Fi) block every direct Web
 An account is used on one device (browser profile) at a time. Each browser keeps a random device ID in IndexedDB (tabs share it) and sends it when it signs in.
 
 - **Signing in with the login code** on another device makes that device the account's only device (`deviceId` on the account in MongoDB). If the old device is online it gets `session:replaced` with reason `new-device`. If it was offline, its next sign-in is refused with `DEVICE_REPLACED`. Either way the old device erases its chats, files and identity and shows **Signed in on another device**.
-- **Another tab** of the same browser only takes over the connection, as before ("UR Chat is open in another tab", **Use here**).
+- **Another tab** of the same browser only takes over the connection, as before ("Humble is open in another tab", **Use here**).
 - **The new device starts fresh.** The server keeps each account's chat list: contact IDs (and who is blocked), and group IDs with their member IDs, sent by the device as `account:links` whenever it changes. It never holds messages. After a code sign-in the new device rebuilds the direct chats and fetches each group's signed member log from its members. Messages from before the sign-in stay hidden (`historyStart`), even though peers sync them for the gap-free sequence check, so the new device shows no old messages, unread counts or notifications.
 - Accounts created before device tracking adopt the first device that resumes.
 

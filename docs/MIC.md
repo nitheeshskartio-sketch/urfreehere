@@ -1,8 +1,6 @@
-# Mic: peer-to-peer voice rooms
+# Voice calls (Mic voice rooms)
 
-*Your room. Your people. Just talk.*
-
-Mic lives at `/mic` (landing page) and `/room/<code>` (invitation links, the room itself). It's registered with `listed: false` in [client/src/apps/registry.tsx](../client/src/apps/registry.tsx); set `listed: true` to show it on the site.
+Voice calls in Humble chats run on these peer-to-peer voice rooms. The standalone Mic pages (`/mic`, `/room/<code>`) are gone: a call is started with the 📞 button in a direct or group chat. That creates a private room (2 people for a direct chat, the smallest size that fits a group, 2-hour limit) and posts a `voice` message with the room code; everyone in the chat joins from that message or from the "… is calling" prompt. The code travels only inside the chat. The call screen is the room view in "call" mode (no invitation links, a back-to-chat button), and a minimised call shows as a bar while you keep chatting. The voice client opens its own Socket.IO connection (`forceNew`), separate from the chat's.
 
 ```
  Browser A ◀════ WebRTC audio (DTLS-SRTP) ════▶ Browser B         mesh: every participant
