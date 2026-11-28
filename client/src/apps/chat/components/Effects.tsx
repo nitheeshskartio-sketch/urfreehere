@@ -397,3 +397,106 @@ export function SlapOverlay({ from, incoming, onSlapBack, onClose }: { from: str
     </div>
   );
 }
+
+/** Three soft wooden knocks (Web Audio, no files). */
+function knockSound() {
+  try {
+    const ctx = new AudioContext();
+    [0, 0.22, 0.44].forEach((t) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(190, ctx.currentTime + t);
+      o.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + t + 0.09);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.12);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + t);
+      o.stop(ctx.currentTime + t + 0.14);
+    });
+    window.setTimeout(() => void ctx.close(), 1200);
+  } catch {
+    /* no audio */
+  }
+}
+
+/**
+ * Knock knock: a hand knocks three times on the screen, which gives a small
+ * shake with each knock. Received knocks wait for the person (with "Knock back").
+ */
+export function KnockOverlay({ from, incoming, sound, onKnockBack, onClose }: { from: string; incoming: boolean; sound: boolean; onKnockBack?: () => void; onClose: () => void }) {
+  const hand = useRef<HTMLSpanElement>(null);
+  const [sentBack, setSentBack] = useState(false);
+
+  const knock = () => {
+    if (sound) knockSound();
+    if (reduceMotion()) return;
+    hand.current?.animate(
+      [0, 1, 2].flatMap(() => [{ transform: 'translate(0,0) rotate(0deg)' }, { transform: 'translate(-10px,6px) rotate(-14deg)' }, { transform: 'translate(0,0) rotate(0deg)' }]),
+      { duration: 660, easing: 'ease-out' },
+    );
+    const root = document.getElementById('root');
+    root?.animate(
+      [0, 1, 2].flatMap(() => [{ transform: 'translate(0,0)' }, { transform: 'translate(-3px,2px)' }, { transform: 'translate(2px,-1px)' }, { transform: 'translate(0,0)' }]),
+      { duration: 660, easing: 'linear' },
+    );
+  };
+
+  useEffect(() => {
+    knock();
+    const again = incoming ? window.setTimeout(knock, 1500) : undefined;
+    const t = incoming ? undefined : window.setTimeout(onClose, 2400);
+    const esc = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(again);
+      window.removeEventListener('keydown', esc);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const knockBack = () => {
+    if (sentBack || !onKnockBack) return;
+    setSentBack(true);
+    knock();
+    onKnockBack();
+    window.setTimeout(onClose, 1400);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] grid place-items-center bg-[radial-gradient(circle_at_center,rgb(var(--c-accent)/0.35),rgb(0_0_0/0.55))] p-6 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={incoming ? `${from} is knocking` : `You knocked on ${from}'s screen`}
+      onClick={(ev) => ev.target === ev.currentTarget && onClose()}
+    >
+      <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full bg-black/30 p-2 text-white hover:bg-black/50" aria-label="Close">
+        <X className="size-5" />
+      </button>
+      <div className="relative flex flex-col items-center text-center text-white">
+        <span className="relative select-none text-[120px] leading-none drop-shadow-xl sm:text-[150px]" aria-hidden>
+          🚪
+          <span ref={hand} className="absolute -right-10 top-1/3 origin-bottom-right text-[64px] sm:-right-12 sm:text-[80px]">
+            🤜
+          </span>
+        </span>
+        <p className="mt-6 text-2xl font-semibold drop-shadow">Knock knock!</p>
+        <p className="mt-1 text-[15px] text-white/85">{incoming ? (sentBack ? `You knocked back on ${from}'s screen` : `${from} is knocking on your screen`) : `You knocked on ${from}'s screen`}</p>
+        {incoming && !sentBack && (
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={onClose} className="rounded-full bg-white px-6 py-2.5 text-[15px] font-semibold text-accent shadow-lg hover:bg-accent-soft">
+              Who's there? 👋
+            </button>
+            {onKnockBack && (
+              <button type="button" onClick={knockBack} className="rounded-full bg-white/20 px-6 py-2.5 text-[15px] font-semibold text-white ring-1 ring-white/50 hover:bg-white/30">
+                Knock back 🚪
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

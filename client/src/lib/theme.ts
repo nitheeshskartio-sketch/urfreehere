@@ -53,3 +53,43 @@ export function useTheme(): [Theme, (t: Theme) => void] {
   }, []);
   return [theme, setTheme];
 }
+
+// ---- Colour themes (palettes) ------------------------------------------------
+// Work with both light and dark mode; see the data-palette blocks in tokens.css.
+
+export type Palette = 'normal' | 'lavender' | 'mint' | 'coffee' | 'midnight';
+export const PALETTES: { id: Palette; label: string; swatch: [string, string, string] }[] = [
+  { id: 'normal', label: 'Normal', swatch: ['#5B5FC7', '#E8EBFA', '#F5F5F5'] },
+  { id: 'lavender', label: 'Lavender', swatch: ['#7C4DC8', '#EBE2FC', '#F5F1FB'] },
+  { id: 'mint', label: 'Mint', swatch: ['#0D8C70', '#D6F1E6', '#F0F8F5'] },
+  { id: 'coffee', label: 'Coffee', swatch: ['#8C5836', '#F0E2D3', '#F5EFE8'] },
+  { id: 'midnight', label: 'Midnight', swatch: ['#2563EB', '#DBE7FE', '#0D1322'] },
+];
+const PALETTE_KEY = 'humble.palette';
+const paletteListeners = new Set<(p: Palette) => void>();
+
+export function currentPalette(): Palette {
+  const p = document.documentElement.dataset.palette as Palette | undefined;
+  return p && PALETTES.some((x) => x.id === p) ? p : 'normal';
+}
+
+export function setPalette(p: Palette) {
+  if (p === 'normal') delete document.documentElement.dataset.palette;
+  else document.documentElement.dataset.palette = p;
+  try {
+    if (p === 'normal') localStorage.removeItem(PALETTE_KEY);
+    else localStorage.setItem(PALETTE_KEY, p);
+  } catch {
+    /* storage unavailable */
+  }
+  for (const l of paletteListeners) l(p);
+}
+
+export function usePalette(): [Palette, (p: Palette) => void] {
+  const [p, set] = useState<Palette>(currentPalette);
+  useEffect(() => {
+    paletteListeners.add(set);
+    return () => void paletteListeners.delete(set);
+  }, []);
+  return [p, setPalette];
+}

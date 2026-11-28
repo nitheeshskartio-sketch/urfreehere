@@ -273,7 +273,7 @@ export default function ChatApp({ path }: { path: string }) {
       <BlastHost />
       <VoiceCallLayer />
       <IncomingCallPrompt />
-      <IdleLock enabled={e.settings.idleLock} />
+      <IdleLock enabled={e.settings.idleLock} onLock={() => e.relockChats()} />
     </div>
   );
 }

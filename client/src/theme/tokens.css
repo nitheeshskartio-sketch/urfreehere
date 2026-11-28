@@ -111,3 +111,156 @@ html[data-theme='dark'] {
     --header-h: 64px;
   }
 }
+
+/*
+ * Colour themes ("Normal" is the default above). Each one sets surfaces, text,
+ * lines and the accent for light and dark mode. Chosen in Settings →
+ * Appearance; `data-palette` is set on <html> by theme-init.js and lib/theme.ts.
+ */
+html[data-palette='lavender']:not([data-theme='dark']) {
+  --c-bg: 255 255 255;
+  --c-surface: 247 244 252;
+  --c-canvas: 245 241 251;
+  --c-subtle: 239 234 249;
+  --c-rail: 236 230 248;
+  --c-rail-fg: 98 86 122;
+  --c-ink: 38 31 54;
+  --c-ink-soft: 68 58 88;
+  --c-muted: 104 94 124;
+  --c-line: 228 221 242;
+  --c-line-strong: 212 202 232;
+  --c-accent: 124 77 200;
+  --c-accent-hover: 106 62 178;
+  --c-accent-text: 116 68 192;
+  --c-accent-soft: 238 231 252;
+  --c-bubble-own: 235 226 252;
+}
+html[data-palette='lavender'][data-theme='dark'] {
+  --c-bg: 40 35 50;
+  --c-surface: 28 24 37;
+  --c-canvas: 28 24 37;
+  --c-subtle: 50 44 63;
+  --c-rail: 15 12 22;
+  --c-rail-fg: 178 166 200;
+  --c-ink: 245 241 252;
+  --c-ink-soft: 216 208 232;
+  --c-muted: 172 162 192;
+  --c-line: 61 54 76;
+  --c-line-strong: 82 73 100;
+  --c-accent: 139 92 220;
+  --c-accent-hover: 156 112 232;
+  --c-accent-text: 192 162 252;
+  --c-accent-soft: 54 42 78;
+  --c-bubble-own: 56 43 82;
+}
+
+html[data-palette='mint']:not([data-theme='dark']) {
+  --c-bg: 255 255 255;
+  --c-surface: 242 249 246;
+  --c-canvas: 240 248 245;
+  --c-subtle: 232 244 239;
+  --c-rail: 227 241 235;
+  --c-rail-fg: 74 102 92;
+  --c-ink: 26 44 38;
+  --c-ink-soft: 52 74 66;
+  --c-muted: 86 110 101;
+  --c-line: 216 233 226;
+  --c-line-strong: 196 220 210;
+  --c-accent: 13 140 112;
+  --c-accent-hover: 10 118 94;
+  --c-accent-text: 11 124 100;
+  --c-accent-soft: 219 243 234;
+  --c-bubble-own: 214 241 230;
+}
+html[data-palette='mint'][data-theme='dark'] {
+  --c-bg: 33 44 41;
+  --c-surface: 23 32 30;
+  --c-canvas: 23 32 30;
+  --c-subtle: 43 56 52;
+  --c-rail: 9 17 15;
+  --c-rail-fg: 160 190 180;
+  --c-ink: 238 248 244;
+  --c-ink-soft: 206 226 218;
+  --c-muted: 156 184 174;
+  --c-line: 52 68 63;
+  --c-line-strong: 70 90 84;
+  --c-accent: 16 150 120;
+  --c-accent-hover: 26 170 138;
+  --c-accent-text: 96 214 180;
+  --c-accent-soft: 24 60 51;
+  --c-bubble-own: 26 64 54;
+}
+
+html[data-palette='coffee']:not([data-theme='dark']) {
+  --c-bg: 255 253 250;
+  --c-surface: 246 241 235;
+  --c-canvas: 245 239 232;
+  --c-subtle: 238 231 222;
+  --c-rail: 234 225 214;
+  --c-rail-fg: 112 92 76;
+  --c-ink: 48 36 28;
+  --c-ink-soft: 82 66 54;
+  --c-muted: 118 100 86;
+  --c-line: 229 219 207;
+  --c-line-strong: 213 200 185;
+  --c-accent: 140 88 54;
+  --c-accent-hover: 118 72 42;
+  --c-accent-text: 128 78 46;
+  --c-accent-soft: 243 231 219;
+  --c-bubble-own: 240 226 211;
+}
+html[data-palette='coffee'][data-theme='dark'] {
+  --c-bg: 44 37 32;
+  --c-surface: 31 26 22;
+  --c-canvas: 31 26 22;
+  --c-subtle: 55 47 41;
+  --c-rail: 17 13 11;
+  --c-rail-fg: 190 172 156;
+  --c-ink: 247 239 231;
+  --c-ink-soft: 224 212 200;
+  --c-muted: 182 166 152;
+  --c-line: 66 56 49;
+  --c-line-strong: 88 76 66;
+  --c-accent: 168 110 70;
+  --c-accent-hover: 186 128 86;
+  --c-accent-text: 226 172 128;
+  --c-accent-soft: 64 48 37;
+  --c-bubble-own: 68 51 39;
+}
+
+html[data-palette='midnight']:not([data-theme='dark']) {
+  --c-bg: 255 255 255;
+  --c-surface: 241 245 251;
+  --c-canvas: 239 243 250;
+  --c-subtle: 231 237 247;
+  --c-rail: 225 232 245;
+  --c-rail-fg: 74 88 114;
+  --c-ink: 22 32 52;
+  --c-ink-soft: 48 60 84;
+  --c-muted: 84 98 124;
+  --c-line: 219 227 239;
+  --c-line-strong: 201 212 229;
+  --c-accent: 37 99 235;
+  --c-accent-hover: 29 78 216;
+  --c-accent-text: 29 88 220;
+  --c-accent-soft: 224 234 254;
+  --c-bubble-own: 219 231 254;
+}
+html[data-palette='midnight'][data-theme='dark'] {
+  --c-bg: 23 31 50;
+  --c-surface: 13 19 34;
+  --c-canvas: 13 19 34;
+  --c-subtle: 31 42 66;
+  --c-rail: 6 10 20;
+  --c-rail-fg: 150 166 194;
+  --c-ink: 236 242 252;
+  --c-ink-soft: 205 215 233;
+  --c-muted: 148 163 190;
+  --c-line: 37 49 76;
+  --c-line-strong: 53 68 100;
+  --c-accent: 59 130 246;
+  --c-accent-hover: 96 155 250;
+  --c-accent-text: 128 172 255;
+  --c-accent-soft: 28 44 82;
+  --c-bubble-own: 30 50 94;
+}

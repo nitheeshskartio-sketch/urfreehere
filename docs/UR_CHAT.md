@@ -290,3 +290,20 @@ During Christmas (1–26 Dec), New Year (27 Dec – 6 Jan), Onam (Atham to the d
 - The admin console (Controls → Festive decorations) can pick a festival, follow the calendar (Automatic, the default) or switch them off for everyone.
 - Each person can turn them off in Settings → Appearance → Festive decorations.
 - Onam and Diwali move each year: their dates are in `client/src/site/season.ts` (2025–2030). Check them each year, or set the festival from the admin console.
+
+## Chat tools
+
+- **In this chat**: while someone has your chat open (app in front), a small green "In this chat" shows next to their status (in groups: "Priya, Raj here"). Sent as a short ping every 15 seconds between contacts; it fades 40 seconds after the last one.
+- **Spotlight**: from a message's menu, show it at the top of the chat for 1 hour, 8 hours, 1 day or 3 days. Everyone in the chat sees it; anyone can remove it.
+- **Knock knock**: from the chat menu or the + menu in direct chats. The other person's screen gets three knocks (with a soft sound if message sounds are on) and can knock back.
+- **Chat background**: per chat, this device only (Chat options → Chat background). Each background is a soft tint or pattern over the theme colour, so bubbles stay readable in light and dark.
+- **Chat lock**: lock a chat from its menu with a 4–8 digit PIN (and fingerprint / face where the device supports passkeys). Locked chats show "Locked chat" in the list, are left out of message search, and their notifications say only "New message". They lock again when you leave them, when the idle lock shows, or after 30 seconds in the background. Forgot the PIN: enter your login code to set a new one. Manage it in Settings → Privacy & data. The PIN is stored only as a salted PBKDF2 hash; this hides chats from someone holding your unlocked device, it doesn't encrypt them.
+- **Archive**: hide a chat without deleting it; the **Archived** filter chip shows them. A new message brings an archived chat back unless it's muted.
+- **Not sent · Retry**: a message of mine that hasn't reached anyone after 20 seconds shows "Not sent" with Retry, which reconnects straight away.
+- **Select messages**: from the chat menu or a message's menu: tap messages, then Copy (with names and times when more than one), Forward to other chats, or Delete for me. Secret, view-once, call and gesture messages can't be forwarded; photos and files only if they're on this device.
+- **Upload progress**: photos and files I'm sending show "Sending 40%" with a cancel button while someone downloads them. Downloads already showed progress and cancel.
+- **Mute until**: mute for 1 hour, 8 hours, 1 day, 1 week, until I unmute, or until a chosen date and time; it unmutes by itself.
+
+## Colour themes
+
+Settings → Appearance → Colour theme: Normal (default), Lavender, Mint, Coffee or Midnight. Each one recolours surfaces, text, lines and the accent, in both light and dark mode. Saved on the device and applied before the page paints.

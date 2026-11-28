@@ -24,7 +24,10 @@ export function Modal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    const first = ref.current?.querySelector<HTMLElement>('input, textarea, button:not([data-close])');
+    // A field marked data-autofocus wins; otherwise the first field or button.
+    const first =
+      ref.current?.querySelector<HTMLElement>('[data-autofocus]') ??
+      ref.current?.querySelector<HTMLElement>('input:not([type=file]):not([type=hidden]), textarea, button:not([data-close])');
     first?.focus();
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);

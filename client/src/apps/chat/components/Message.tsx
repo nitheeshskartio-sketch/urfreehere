@@ -1,4 +1,4 @@
-import { Ban, Check, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Pencil, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
+import { Ban, Check, CheckSquare, CircleAlert, Copy, Eye, EyeOff, EllipsisVertical, Flame, Forward, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Pencil, Reply, RotateCcw, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatBytes } from '../../../lib/format';
 import { GestureCard, PromiseCard } from './Promise';
@@ -21,6 +21,9 @@ export function Message({
   onReply,
   onOpenImage,
   onJump,
+  actions,
+  selecting = false,
+  selected = false,
 }: {
   event: StoredEvent;
   showSender: boolean;
@@ -28,6 +31,11 @@ export function Message({
   onReply: (e: StoredEvent) => void;
   onOpenImage: (fileId: string) => void;
   onJump: (id: string) => void;
+  /** Select (multi-select), forward and spotlight, handled by the chat. */
+  actions?: MessageActions;
+  /** Multi-select is on: tapping the message selects it. */
+  selecting?: boolean;
+  selected?: boolean;
 }) {
   const e = useEngine();
   const mine = event.author === e.me;
@@ -65,11 +73,16 @@ export function Message({
     void e.deleteForEveryone(event.id).then((how) => how === 'me' && e.toast('Too late to delete for everyone, so it was deleted only for you.'));
   const deleteMe = () => window.confirm('Delete this message from this device? Others will still have it.') && void e.deleteLocal([event.id]);
   const react = (r: Reaction) => void e.react(event, r);
-  const noCopy = event.kind === 'image' || event.kind === 'gif' || event.kind === 'hug' || event.kind === 'slap' || event.kind === 'voice' || viewOnce || (secret && !revealed) || revoked;
+  const gestureKind = event.kind === 'hug' || event.kind === 'slap' || event.kind === 'knock';
+  const noCopy = event.kind === 'image' || event.kind === 'gif' || gestureKind || event.kind === 'voice' || viewOnce || (secret && !revealed) || revoked;
+  const noForward = revoked || viewOnce || secret || gestureKind || event.kind === 'voice' || event.kind === 'promise';
   const menuItems = [
     { label: 'Reply', icon: Reply, onSelect: () => onReply(event), hidden: revoked },
     { label: 'Edit', icon: Pencil, onSelect: () => setEditing(true), hidden: !e.canEdit(event) },
     { label: 'Copy', icon: Copy, onSelect: copy, hidden: noCopy },
+    { label: 'Forward', icon: Forward, onSelect: () => actions?.onForward([event.id]), hidden: !actions || noForward },
+    { label: 'Spotlight', icon: Sparkles, onSelect: () => actions?.onSpotlight(event), hidden: !actions?.canSpotlight || revoked || viewOnce || secret },
+    { label: 'Select', icon: CheckSquare, onSelect: () => actions?.onSelect(event.id), hidden: !actions },
     {
       label: `Delete for everyone (${Math.ceil(windowLeft / 1000)}s)`,
       icon: Undo2,
@@ -80,8 +93,32 @@ export function Message({
     { label: 'Delete for me', icon: Trash2, danger: true, onSelect: deleteMe },
   ];
 
+  const stuck = mine && !revoked && e.isStuck(event);
+  const upload = mine && (event.kind === 'image' || event.kind === 'file') ? e.uploadOf(String(body.fileId)) : null;
+
   return (
-    <div className={`group relative flex gap-3 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-1.5'}`} id={`m-${event.id}`}>
+    <div
+      className={`group relative flex gap-3 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-1.5'} ${
+        selecting ? `-mx-2 cursor-pointer rounded-lg px-2 sm:-mx-3 sm:px-3 ${selected ? 'bg-accent-soft/70' : 'hover:bg-ink/[0.03]'}` : ''
+      }`}
+      id={`m-${event.id}`}
+      onClickCapture={
+        selecting
+          ? (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              actions?.onSelect(event.id);
+            }
+          : undefined
+      }
+      role={selecting ? 'checkbox' : undefined}
+      aria-checked={selecting ? selected : undefined}
+    >
+      {selecting && (
+        <span className={`mt-1 grid size-5 shrink-0 self-center place-items-center rounded-full border-2 ${selected ? 'border-accent bg-accent text-white' : 'border-line-strong bg-panel'} ${mine ? 'mr-auto' : ''}`} aria-hidden>
+          {selected && <Check className="size-3" strokeWidth={3} />}
+        </span>
+      )}
       {!mine && (
         <span className="w-8 shrink-0 pt-[22px]">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} ring={e.ringFor(event.author)} />}</span>
       )}
@@ -142,15 +179,15 @@ export function Message({
               {event.kind === 'gif' && <GifContent body={body as unknown as GifBody} />}
               {event.kind === 'promise' && <PromiseCard event={event} mine={mine} />}
               {event.kind === 'voice' && <VoiceCard event={event} mine={mine} />}
-              {(event.kind === 'hug' || event.kind === 'slap') && (
-                <GestureCard kind={event.kind} mine={mine} onReplay={() => window.dispatchEvent(new CustomEvent('urchat:hug-replay', { detail: event.id }))} />
+              {gestureKind && (
+                <GestureCard kind={event.kind as 'hug' | 'slap' | 'knock'} mine={mine} onReplay={() => window.dispatchEvent(new CustomEvent('urchat:hug-replay', { detail: event.id }))} />
               )}
               </SecretCover>
               )}
             </div>
             {/* Hover action bar, like Teams */}
             <div
-              className={`absolute -top-4 z-10 flex items-center rounded-md border border-line bg-panel shadow-card opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden ${
+              className={`absolute -top-4 z-10 flex items-center rounded-md border border-line bg-panel shadow-card opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:hidden ${selecting ? '!hidden' : ''} ${
                 mine ? 'right-1' : 'left-1'
               }`}
             >
@@ -185,7 +222,7 @@ export function Message({
           </div>
           {mine && <Ticks status={e.deliveryOf(event)} className="mb-0.5 shrink-0" />}
           {/* Touch devices: actions via the same menu, without hover */}
-          <div className="hidden [@media(pointer:coarse)]:block">
+          <div className={selecting ? 'hidden' : 'hidden [@media(pointer:coarse)]:block'}>
             <Menu
               label="Message options"
               align={mine ? 'right' : 'left'}
@@ -201,6 +238,25 @@ export function Message({
             />
           </div>
         </div>
+        {upload && (
+          <span className="chat-meta mt-1 flex items-center gap-2 px-1 text-muted">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            Sending {upload.total ? Math.floor((upload.sent / upload.total) * 100) : 0}% · {formatBytes(upload.sent)} of {formatBytes(upload.total)}
+            <button type="button" onClick={() => e.cancelUpload(String(body.fileId))} className="rounded p-0.5 hover:bg-ink/5 hover:text-ink" aria-label="Cancel sending" title="Cancel sending">
+              <X className="size-3.5" />
+            </button>
+          </span>
+        )}
+        {stuck && !selecting && (
+          <span className="chat-meta mt-1 flex items-center gap-1.5 px-1 text-danger">
+            <CircleAlert className="size-3.5" />
+            Not sent
+            <button type="button" onClick={() => e.retrySend(event)} className="inline-flex items-center gap-1 font-semibold text-accent hover:underline">
+              <RotateCcw className="size-3" />
+              Retry
+            </button>
+          </span>
+        )}
         {!revoked && REACTIONS.some((r) => reactions.counts[r.id] > 0) && (
           <div className={`relative z-[1] -mt-1 mb-0.5 flex max-w-full flex-wrap gap-1 px-1 ${mine ? 'mr-5 justify-end' : 'ml-1'}`}>
             {REACTIONS.filter((r) => reactions.counts[r.id] > 0).map((r) => {
@@ -241,6 +297,13 @@ export function Message({
       </div>
     </div>
   );
+}
+
+export interface MessageActions {
+  onSelect: (id: string) => void;
+  onForward: (ids: string[]) => void;
+  onSpotlight: (e: StoredEvent) => void;
+  canSpotlight: boolean;
 }
 
 function TransferStatus({ fileId, size }: { fileId: string; size: number }) {

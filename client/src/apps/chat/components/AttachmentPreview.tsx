@@ -54,6 +54,22 @@ export function AttachmentPreview({
     else onSend({ type: 'files', files: items.filter((i) => !i.error).map((i) => i.file), as: pending.as }, mode, caption.trim());
   };
 
+  // Enter sends from anywhere in this popup (not only the caption box), except
+  // on a button, where Enter presses that button.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Enter' || ev.shiftKey || ev.isComposing || ev.defaultPrevented) return;
+      const t = ev.target as HTMLElement | null;
+      if (t && (t.closest('button, a, select, textarea') || (t.tagName === 'INPUT' && t.getAttribute('aria-label') !== 'Caption' && (t as HTMLInputElement).type !== 'file'))) return;
+      ev.preventDefault();
+      submitRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <Modal
       title={title}
@@ -64,7 +80,7 @@ export function AttachmentPreview({
           <Button variant="secondary" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!sendable}>
+          <Button onClick={submit} disabled={!sendable} data-autofocus={isGif ? "" : undefined}>
             <SendHorizontal />
             {mode === 'secret' ? 'Send secretly' : mode === 'once' ? 'Send as view once' : 'Send'}
             {sendable > 1 ? ` (${sendable})` : ''}
@@ -137,7 +153,7 @@ export function AttachmentPreview({
           <input
             value={caption}
             onChange={(ev) => setCaption(ev.target.value)}
-            onKeyDown={(ev) => ev.key === 'Enter' && !ev.shiftKey && (ev.preventDefault(), submit())}
+            data-autofocus=""
             maxLength={1000}
             placeholder="Add a caption (optional)"
             aria-label="Caption"

@@ -1,6 +1,14 @@
 import {
   Archive,
   ArrowDown,
+  CheckSquare,
+  Copy,
+  DoorOpen,
+  Forward,
+  Lock,
+  LockOpen,
+  Palette,
+  X,
   ArrowLeft,
   BellOff,
   Ban,
@@ -31,7 +39,9 @@ import { Message, SystemMessage } from './Message';
 import { deleteChatPrompt } from './deleteChat';
 import { MoodBadge, MoodButton } from './Mood';
 import { MeterInline } from './Meter';
-import { HugOverlay, SlapOverlay } from './Effects';
+import { HugOverlay, KnockOverlay, SlapOverlay } from './Effects';
+import { BackgroundDialog, ForwardDialog, HereNow, LockSetupDialog, MuteDialog, SpotlightBar, SpotlightDialog, UnlockDialog, UnlockForm, mutedUntilText } from './ChatExtras';
+import type { MessageActions } from './Message';
 import { openCall, useCall } from './VoiceCall';
 import type { Gesture } from '../lib/types';
 import { PromiseBar } from './Promise';
@@ -62,6 +72,11 @@ export function ChatView({
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [showJump, setShowJump] = useState(false);
+  const [dialog, setDialog] = useState<'mute' | 'background' | 'lock-setup' | 'unlock-remove' | null>(null);
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const [forwardIds, setForwardIds] = useState<string[] | null>(null);
+  const [spotlightFor, setSpotlightFor] = useState<StoredEvent | null>(null);
+  const locked = e.isLocked(conv.id);
 
   const events = e.eventsOf(conv.id);
   const title = e.convTitle(conv);
@@ -95,7 +110,7 @@ export function ChatView({
   };
   const unplayed = twoPerson ? e.unplayedGesture(conv.id) : undefined;
   useEffect(() => {
-    if (!unplayed || gesture || document.visibilityState !== 'visible') return;
+    if (!unplayed || gesture || locked || document.visibilityState !== 'visible') return;
     e.markPlayed(unplayed);
     setGesture({ kind: unplayed.kind as Gesture, incoming: true });
   }, [unplayed, gesture, e]);
@@ -103,7 +118,7 @@ export function ChatView({
   useEffect(() => {
     const replay = (ev: Event) => {
       const h = e.event(String((ev as CustomEvent).detail));
-      if (h?.conv === conv.id && (h.kind === 'hug' || h.kind === 'slap')) setGesture({ kind: h.kind, incoming: h.author !== e.me });
+      if (h?.conv === conv.id && (h.kind === 'hug' || h.kind === 'slap' || h.kind === 'knock')) setGesture({ kind: h.kind, incoming: h.author !== e.me });
     };
     window.addEventListener('urchat:hug-replay', replay);
     return () => window.removeEventListener('urchat:hug-replay', replay);
@@ -230,6 +245,52 @@ export function ChatView({
 
   const waiting = !isGroup && events.some((x) => x.author === e.me && e.deliveryOf(x) === 'waiting');
 
+  // Unsent messages turn into "Not sent · Retry" after a while: re-check now and then.
+  const anyWaiting = events.some((x) => x.author === e.me && e.deliveryOf(x) === 'waiting');
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!anyWaiting) return;
+    const t = window.setInterval(() => tick((n) => n + 1), 10_000);
+    return () => window.clearInterval(t);
+  }, [anyWaiting]);
+
+  // Leave selection mode when switching chats.
+  useEffect(() => setSelected(null), [conv.id]);
+  const toggleSelect = (id: string) =>
+    setSelected((cur) => {
+      const n = new Set(cur ?? []);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const actions: MessageActions = {
+    onSelect: toggleSelect,
+    onForward: (ids) => setForwardIds(ids),
+    onSpotlight: (ev) => setSpotlightFor(ev),
+    canSpotlight: canPost && !self,
+  };
+  const selectedEvents = selected ? events.filter((x) => selected.has(x.id)) : [];
+  const copySelected = () => {
+    const lines = selectedEvents.map((x) => {
+      const t = x.kind === 'text' ? e.textOf(x) : e.describe(x);
+      return selectedEvents.length === 1 ? t : `[${new Date(x.ts).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}] ${x.author === e.me ? e.profile?.name ?? 'You' : e.nameOf(x.author)}: ${t}`;
+    });
+    void navigator.clipboard?.writeText(lines.join('\n')).then(() => e.toast(`Copied ${selectedEvents.length} message${selectedEvents.length === 1 ? '' : 's'}`, 'success'), () => e.toast("Couldn't copy", 'error'));
+    setSelected(null);
+  };
+  const deleteSelected = () => {
+    if (!window.confirm(`Delete ${selectedEvents.length} message${selectedEvents.length === 1 ? '' : 's'} from this device? Others will still have them.`)) return;
+    void e.deleteLocal(selectedEvents.map((x) => x.id));
+    setSelected(null);
+  };
+  const lockToggle = () => {
+    if (e.hasLock(conv.id)) setDialog('unlock-remove');
+    else if (e.settings.chatLock) {
+      e.setConvLocked(conv.id, true);
+      e.toast('Chat locked. It needs your PIN the next time you open it.', 'success');
+    } else setDialog('lock-setup');
+  };
+
   // --- drag & drop files into the chat
   const onDrop = (ev: DragEvent) => {
     ev.preventDefault();
@@ -242,7 +303,7 @@ export function ChatView({
 
   return (
     <div
-      className="relative flex h-full min-w-0 flex-col bg-canvas"
+      className={`relative flex h-full min-w-0 flex-col bg-canvas ${conv.background && !locked ? `chat-bg-${conv.background}` : ''}`}
       onDragOver={(ev) => {
         if (canPost && ev.dataTransfer.types.includes('Files')) {
           ev.preventDefault();
@@ -275,6 +336,7 @@ export function ChatView({
             <span className="block truncate text-[15px] font-semibold">{title}</span>
             <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">
               <span className="truncate">{subtitle}</span>
+              {!typing.length && !self && !locked && <HereNow conv={conv.id} isGroup={isGroup} />}
               {/* Phones: the like/dislike counts sit under the name instead of the capsule. */}
               {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} compact className="shrink-0 text-[11.5px] max-[359px]:hidden sm:hidden" />}
             </span>
@@ -309,9 +371,18 @@ export function ChatView({
             { label: isGroup ? 'Group info' : 'Contact info', icon: Info, onSelect: onInfo },
             { label: 'Send a virtual hug', icon: Heart, hidden: !twoPerson || !canPost || !!openPromise, onSelect: () => sendGesture('hug') },
             { label: 'Send a virtual slap', icon: Hand, hidden: !twoPerson || !canPost || !!openPromise, onSelect: () => sendGesture('slap') },
+            { label: 'Knock knock', icon: DoorOpen, hidden: !twoPerson || !canPost || !!openPromise || locked, onSelect: () => sendGesture('knock') },
+            { label: 'Select messages', icon: CheckSquare, hidden: locked || !events.length, onSelect: () => setSelected(new Set()) },
+            { label: 'Chat background', icon: Palette, hidden: locked, onSelect: () => setDialog('background') },
+            { label: e.hasLock(conv.id) ? 'Remove chat lock' : 'Lock chat', icon: e.hasLock(conv.id) ? LockOpen : Lock, hidden: self, onSelect: lockToggle },
             { label: 'Invite people', icon: UserPlus, onSelect: onInvite, hidden: !isGroup || !e.isAdmin(conv.groupId!) || !!group?.deleted },
             { label: conv.pinned ? 'Unpin chat' : 'Pin chat', icon: Pin, onSelect: () => e.updateConv(conv.id, { pinned: !conv.pinned }) },
-            { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, hidden: self, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
+            {
+              label: conv.muted ? (conv.mutedUntil ? `Unmute (muted until ${mutedUntilText(conv.mutedUntil)})` : 'Unmute') : 'Mute…',
+              icon: BellOff,
+              hidden: self,
+              onSelect: () => (conv.muted ? e.updateConv(conv.id, { muted: false }) : setDialog('mute')),
+            },
             { label: conv.archived ? 'Unarchive' : 'Archive', icon: Archive, onSelect: () => e.updateConv(conv.id, { archived: !conv.archived }) },
             {
               label: 'Block',
@@ -372,7 +443,16 @@ export function ChatView({
         </div>
       )}
 
+      {locked ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4">
+          <UnlockForm onUnlocked={() => e.unlockConv(conv.id)} />
+        </div>
+      ) : (
+        <SpotlightBar conv={conv.id} onJump={jumpTo} />
+      )}
+
       {/* Messages */}
+      {!locked && (
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 sm:px-6">
         {events.length === 0 && !conv.joining && (
           <div className="mx-auto mt-10 max-w-sm rounded-xl bg-panel/80 px-5 py-4 text-center text-sm text-muted shadow-card">
@@ -388,10 +468,20 @@ export function ChatView({
             Load older messages
           </button>
         )}
-        <MessageList events={shown} hasOlder={start > 0} isGroup={isGroup} onReply={setReplyTo} onOpenImage={(id) => setViewer(Math.max(0, images.indexOf(id)))} onJump={jumpTo} />
+        <MessageList
+          events={shown}
+          hasOlder={start > 0}
+          isGroup={isGroup}
+          onReply={setReplyTo}
+          onOpenImage={(id) => setViewer(Math.max(0, images.indexOf(id)))}
+          onJump={jumpTo}
+          actions={actions}
+          selected={selected}
+        />
       </div>
+      )}
 
-      {showJump && (
+      {showJump && !locked && (
         <button
           type="button"
           onClick={() => {
@@ -439,7 +529,36 @@ export function ChatView({
         />
       )}
 
-      {canPost && openPromise ? (
+      {gesture?.kind === 'knock' && (
+        <KnockOverlay
+          from={title}
+          incoming={gesture.incoming}
+          sound={e.settings.notificationSound}
+          onKnockBack={gesture.incoming && canPost ? () => void e.sendGesture(conv.id, 'knock') : undefined}
+          onClose={() => setGesture(null)}
+        />
+      )}
+
+      {locked ? null : selected ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line bg-panel px-3 py-2.5 sm:px-4">
+          <button type="button" onClick={() => setSelected(null)} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label="Cancel selection">
+            <X className="size-5" />
+          </button>
+          <span className="mr-auto text-sm font-medium">{selected.size ? `${selected.size} selected` : 'Tap messages to select'}</span>
+          <Button variant="secondary" size="sm" onClick={copySelected} disabled={!selected.size}>
+            <Copy />
+            <span className="max-[400px]:hidden">Copy</span>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setForwardIds([...selected])} disabled={!selected.size}>
+            <Forward />
+            <span className="max-[400px]:hidden">Forward</span>
+          </Button>
+          <Button variant="danger" size="sm" onClick={deleteSelected} disabled={!selected.size}>
+            <Trash2 />
+            <span className="max-[400px]:hidden">Delete</span>
+          </Button>
+        </div>
+      ) : canPost && openPromise ? (
         <PromiseBar promise={openPromise} peerName={title} />
       ) : canPost ? (
         <Composer
@@ -472,6 +591,32 @@ export function ChatView({
         </div>
       )}
 
+      {dialog === 'mute' && <MuteDialog conv={conv.id} onClose={() => setDialog(null)} />}
+      {dialog === 'background' && <BackgroundDialog conv={conv.id} onClose={() => setDialog(null)} />}
+      {dialog === 'lock-setup' && (
+        <LockSetupDialog
+          onClose={() => setDialog(null)}
+          onDone={() => {
+            setDialog(null);
+            e.setConvLocked(conv.id, true);
+            e.toast('Chat locked. It needs your PIN the next time you open it.', 'success');
+          }}
+        />
+      )}
+      {dialog === 'unlock-remove' && (
+        <UnlockDialog
+          title="Remove chat lock"
+          onClose={() => setDialog(null)}
+          onUnlocked={() => {
+            setDialog(null);
+            e.setConvLocked(conv.id, false);
+            e.toast('Chat lock removed', 'success');
+          }}
+        />
+      )}
+      {forwardIds && <ForwardDialog ids={forwardIds} onClose={() => setForwardIds(null)} onDone={() => setSelected(null)} />}
+      {spotlightFor && <SpotlightDialog event={spotlightFor} onClose={() => setSpotlightFor(null)} />}
+
       {viewer !== null && images.length > 0 && (
         <ImageViewer
           fileIds={images}
@@ -492,6 +637,8 @@ function MessageList({
   onReply,
   onOpenImage,
   onJump,
+  actions,
+  selected,
 }: {
   events: StoredEvent[];
   hasOlder: boolean;
@@ -499,6 +646,8 @@ function MessageList({
   onReply: (e: StoredEvent) => void;
   onOpenImage: (fileId: string) => void;
   onJump: (id: string) => void;
+  actions: MessageActions;
+  selected: Set<string> | null;
 }) {
   const e = useEngine();
   const out: React.ReactNode[] = hasOlder ? [] : [
@@ -530,7 +679,17 @@ function MessageList({
     const showSender = !prev || prev.author !== ev.author || ev.ts - prev.ts > 5 * 60_000;
     out.push(
       <div key={ev.id} className="rounded-lg transition-colors duration-700">
-        <Message event={ev} showSender={showSender} isGroup={isGroup} onReply={onReply} onOpenImage={onOpenImage} onJump={onJump} />
+        <Message
+          event={ev}
+          showSender={showSender}
+          isGroup={isGroup}
+          onReply={onReply}
+          onOpenImage={onOpenImage}
+          onJump={onJump}
+          actions={actions}
+          selecting={!!selected}
+          selected={!!selected?.has(ev.id)}
+        />
       </div>,
     );
     prev = ev;

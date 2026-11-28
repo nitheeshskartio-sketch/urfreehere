@@ -245,7 +245,7 @@ export function startNotifications(engine: ChatEngine): () => void {
       void showNotification(
         group ? `${sender} in ${group}` : sender,
         {
-          body: engine.settings.notificationPreview ? engine.describe(e).slice(0, 160) : 'New message',
+          body: engine.settings.notificationPreview && !engine.hasLock(e.conv) ? engine.describe(e).slice(0, 160) : 'New message',
           icon: avatar?.startsWith('data:image/') ? avatar : '/icons/bee-192.png',
           tag: e.conv, // one notification per conversation, replaced by newer ones
           silent: true, // we play our own sound

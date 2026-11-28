@@ -38,12 +38,20 @@ import type {
   PromiseStatus,
   Gesture,
   Meter,
+  Spotlight,
 } from './types';
 
 const MAX_SESSIONS = 40;
 const MAX_STRANGER_SESSIONS = 6;
 const MAX_TEXT = 4000;
 const TYPING_TTL = 4500;
+/** "Here now": ping every 15 s while a chat is open; it fades 40 s after the last one. */
+const HERE_PING_MS = 15_000;
+const HERE_TTL_MS = 40_000;
+/** My message counts as stuck (shows "Not sent · Retry") after this long without reaching anyone. */
+const STUCK_AFTER_MS = 20_000;
+/** Locked chats lock again after the app has been in the background this long. */
+const RELOCK_AFTER_MS = 30_000;
 const SYNC_BATCH = 100;
 const USER_ID_RE = /^[A-Z2-9]{16}$/;
 const CONV_RE = /^(dm:[A-Z2-9]{16}:[A-Z2-9]{16}|g:[A-Za-z0-9_-]{16,40})$/;
@@ -98,7 +106,7 @@ const PURGE_AFTER_MISSING_MS = 24 * 60 * 60 * 1000;
 
 /** Real messages (not group operations, reactions or deletions). */
 export function isMessage(e: { kind: EventKind }) {
-  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter' && e.kind !== 'edit';
+  return e.kind !== 'op' && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter' && e.kind !== 'edit' && e.kind !== 'spotlight';
 }
 
 /** Applies text size, spacing and clock settings to the page. */
@@ -217,6 +225,15 @@ function validEvent(e: unknown): e is ChatEvent {
     case 'hug':
     case 'slap':
       return Object.keys(b).length === 0;
+    case 'knock':
+      return x.conv.startsWith('dm:') && Object.keys(b).length === 0;
+    case 'spotlight':
+      // A message to show at the top until `until` (at most 3 days), or target null to clear it.
+      return (
+        (b.target === null || (typeof b.target === 'string' && b.target.length <= 64)) &&
+        Number.isInteger(b.until) && (b.until as number) >= 0 && (b.until as number) <= x.ts + 3 * 86_400_000 + 60_000 &&
+        Object.keys(b).length === 2
+      );
     case 'voice':
       return typeof b.code === 'string' && /^MIC-[2-9A-HJ-KMNP-Z]{6}$/.test(b.code) && Object.keys(b).length === 1;
     case 'meter':
@@ -331,6 +348,14 @@ export class ChatEngine {
   /** Peers we couldn't reach directly: use the server relay until this time, then try direct again. */
   private relayPreferred = new Map<UserId, number>();
   typing = new Map<ConvId, Map<UserId, number>>();
+  /** Who has this chat open right now (from their "here" pings), until when. */
+  here = new Map<ConvId, Map<UserId, number>>();
+  /** Latest spotlight per chat. */
+  spotlights = new Map<ConvId, Spotlight>();
+  /** Locked chats opened with the PIN in this session; locked again when the app is left. */
+  unlocked = new Set<ConvId>();
+  /** Files I'm sending: per request, bytes sent so far. */
+  uploads = new Map<string, Map<string, { peer: UserId; sent: number; total: number; abort: AbortController }>>();
   transfers = new Map<string, FileTransferState>();
   invites = new Map<string, LocalInvite[]>();
   toasts: Toast[] = [];
@@ -798,12 +823,25 @@ export class ChatEngine {
     window.setInterval(() => void this.refreshDirectory(), 6 * 60 * 60 * 1000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.activeConv) this.markRead(this.activeConv);
-      if (document.visibilityState === 'hidden') void this.flushWrites();
+      if (document.visibilityState === 'hidden') {
+        void this.flushWrites();
+        this.hiddenAt = Date.now();
+      } else if (this.hiddenAt && Date.now() - this.hiddenAt > RELOCK_AFTER_MS) {
+        // Away for a while: locked chats need the PIN again. (Short trips, like
+        // picking a photo, don't count.)
+        this.relockChats();
+      }
+      this.sendHere();
     });
+    // "Here now" pings while a chat is open, and muted-until timers.
+    window.setInterval(() => this.sendHere(true), HERE_PING_MS);
+    window.setInterval(() => this.checkMutes(), 30_000);
+    this.checkMutes();
     window.addEventListener('pagehide', () => void this.flushWrites());
   }
 
   private listenersAttached = false;
+  private hiddenAt = 0;
 
   /** Take the session back after another tab replaced this one. */
   reclaim() {
@@ -849,6 +887,9 @@ export class ChatEngine {
       const list = m.get(e.author) ?? [];
       list.push({ likes: Number(b.likes), dislikes: Number(b.dislikes), ts: e.ts });
       m.set(e.author, list);
+    } else if (e.kind === 'spotlight' && !e.local.deleted) {
+      const cur = this.spotlights.get(e.conv);
+      if (!cur || cur.ts <= e.ts) this.spotlights.set(e.conv, { target: (b.target as string | null) ?? '', until: Number(b.until), author: e.author, ts: e.ts });
     } else if (e.kind === 'mood' && !e.local.deleted) {
       let m = this.moods.get(e.conv);
       if (!m) this.moods.set(e.conv, (m = new Map()));
@@ -898,7 +939,7 @@ export class ChatEngine {
   eventsOf(conv: ConvId): StoredEvent[] {
     const c = this.convs.get(conv);
     const cut = Math.max(c?.clearedBefore ?? 0, this.historyStart);
-    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.expired && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter' && e.kind !== 'edit');
+    return (this.events.get(conv) ?? []).filter((e) => !e.local.deleted && !e.local.expired && e.ts > cut && e.kind !== 'react' && e.kind !== 'delete' && e.kind !== 'mood' && e.kind !== 'skip' && e.kind !== 'promise-reply' && e.kind !== 'meter' && e.kind !== 'edit' && e.kind !== 'spotlight');
   }
 
   event(id: string | null | undefined): StoredEvent | undefined {
@@ -1016,6 +1057,8 @@ export class ChatEngine {
         return '🤗 Virtual hug';
       case 'slap':
         return '🖐️ Virtual slap';
+      case 'knock':
+        return '🚪 Knock knock';
       case 'voice':
         return '📞 Voice call';
       case 'promise':
@@ -1262,6 +1305,7 @@ export class ChatEngine {
     // Over the server relay there's no signed handshake, so include the key (checked against the chat ID).
     s.send({ t: 'hello', v: 1, profile: this.profile, ...(s.viaServer ? { pub: this.identity?.publicJwk } : {}) });
     void this.flushOutbox(s);
+    if (this.activeConv && this.participants(this.activeConv).includes(s.peerId)) this.sendHere(true);
     window.setTimeout(() => void s.detectRoute().then(() => this.notify()), 800);
     this.notify();
   }
@@ -1494,6 +1538,9 @@ export class ChatEngine {
         break;
       case 'typing':
         this.onTyping(peer, String(msg.conv));
+        break;
+      case 'here':
+        this.onHere(peer, String(msg.conv), msg.on === true);
         break;
       case 'group-hello':
         this.onGroupHello(peer, String(msg.groupId));
@@ -1841,7 +1888,14 @@ export class ChatEngine {
   }
 
   setActive(conv: ConvId | null) {
+    const prev = this.activeConv;
     this.activeConv = conv;
+    if (prev && prev !== conv) {
+      this.sendHere(false, prev, false);
+      // Leaving a locked chat locks it again.
+      this.unlocked.delete(prev);
+    }
+    this.sendHere();
     if (conv) {
       this.markRead(conv);
       for (const p of this.participants(conv)) if (p !== this.me) this.maybeConnect(p);
@@ -2118,7 +2172,31 @@ export class ChatEngine {
     const channel = s.openFileChannel(`file:${rid}`);
     // Through the server, keep less in flight so a big file doesn't pile up there.
     const limits = s.viaServer ? { high: 512 * 1024, low: 128 * 1024 } : undefined;
-    sendFile(channel, rec.blob, s.maxChunk, limits).catch(() => channel.close());
+    // Progress for my own messages ("Sending 40%"), with cancel.
+    const mine = e.author === this.me;
+    const abort = new AbortController();
+    let m = this.uploads.get(fileId);
+    if (mine) {
+      if (!m) this.uploads.set(fileId, (m = new Map()));
+      m.set(rid, { peer: s.peerId, sent: 0, total: rec.blob.size, abort });
+    }
+    let last = 0;
+    const done = () => {
+      m?.delete(rid);
+      if (m && !m.size) this.uploads.delete(fileId);
+      if (mine) this.notify();
+    };
+    sendFile(channel, rec.blob, s.maxChunk, limits, (sent) => {
+      const u = m?.get(rid);
+      if (!u) return;
+      u.sent = sent;
+      if (Date.now() - last > 250) {
+        last = Date.now();
+        this.notify();
+      }
+    }, abort.signal)
+      .catch(() => channel.close())
+      .finally(done);
   }
 
   // ------------------------------------------------------ conversations
@@ -2178,7 +2256,10 @@ export class ChatEngine {
     if (!c) return;
     this.saveContact({ ...c, state: 'contact' });
     const conv = dmId(this.me, peer);
-    if (this.activeConv === conv) this.markRead(conv);
+    if (this.activeConv === conv) {
+      this.markRead(conv);
+      this.sendHere(); // now they may see I'm here
+    }
     this.resumeDownloads();
     this.notify();
   }
@@ -2199,10 +2280,184 @@ export class ChatEngine {
     this.notify();
   }
 
-  updateConv(conv: ConvId, patch: Partial<Pick<Conversation, 'pinned' | 'muted' | 'archived'>>) {
+  updateConv(conv: ConvId, patch: Partial<Pick<Conversation, 'pinned' | 'muted' | 'archived' | 'mutedUntil' | 'background'>>) {
     const c = this.convs.get(conv);
-    if (c) this.saveConv({ ...c, ...patch });
+    if (c) {
+      const next = { ...c, ...patch };
+      if ('muted' in patch && !patch.mutedUntil) delete next.mutedUntil;
+      if (patch.background === undefined && 'background' in patch) delete next.background;
+      this.saveConv(next);
+    }
     this.notify();
+  }
+
+  /** Mute a chat until a time (null: until I unmute it). */
+  muteUntil(conv: ConvId, until: number | null) {
+    this.updateConv(conv, until ? { muted: true, mutedUntil: until } : { muted: true });
+  }
+
+  /** Unmutes chats whose "muted until" time has passed. */
+  private checkMutes() {
+    const now = Date.now();
+    for (const c of this.convs.values()) if (c.muted && c.mutedUntil && c.mutedUntil <= now) this.updateConv(c.id, { muted: false });
+  }
+
+  // ---------------------------------------------------------- here now
+
+  /**
+   * Tells the people in the open chat I'm looking at it (and again every
+   * HERE_PING_MS), or that I left. Only sent while the app is in front.
+   */
+  private sendHere(refresh = false, conv: ConvId | null = this.activeConv, on = document.visibilityState === 'visible') {
+    if (!conv || this.isSelfChat(conv)) return;
+    if (conv.startsWith('dm:')) {
+      const peer = this.convs.get(conv)?.peerId;
+      if (!peer || this.contacts.get(peer)?.state !== 'contact') return;
+    }
+    if (refresh && !on) return;
+    for (const p of this.participants(conv)) if (p !== this.me) this.sendTo(p, { t: 'here', conv, on });
+  }
+
+  private onHere(peer: UserId, conv: ConvId, on: boolean) {
+    if (!this.participants(conv).includes(peer)) return;
+    let m = this.here.get(conv);
+    if (!m) this.here.set(conv, (m = new Map()));
+    if (on) m.set(peer, Date.now() + HERE_TTL_MS);
+    else m.delete(peer);
+    this.notify();
+    if (on) window.setTimeout(() => this.notify(), HERE_TTL_MS + 50);
+  }
+
+  /** People who have this chat open right now. */
+  hereIn(conv: ConvId): UserId[] {
+    const now = Date.now();
+    return [...(this.here.get(conv) ?? [])].filter(([u, until]) => until > now && this.peerStatus(u) !== 'offline').map(([u]) => u);
+  }
+
+  // --------------------------------------------------------- spotlight
+
+  /** The message in the spotlight in this chat, if it's still on. */
+  spotlightOf(conv: ConvId): { event: StoredEvent; spot: Spotlight } | null {
+    const spot = this.spotlights.get(conv);
+    if (!spot || !spot.target || spot.until <= Date.now()) return null;
+    const event = this.byId.get(spot.target);
+    if (!event || event.conv !== conv || event.local.deleted || event.local.revoked || event.local.expired || !isMessage(event)) return null;
+    return { event, spot };
+  }
+
+  /** Puts a message in the spotlight for `ms`, or clears it (target null). Everyone in the chat sees it. */
+  async setSpotlight(conv: ConvId, target: string | null, ms = 0) {
+    const err = this.canPost(conv);
+    if (err) return this.toast(err, 'error');
+    const until = target ? Date.now() + Math.min(ms, 3 * 86_400_000) : 0;
+    await this.publish(await this.makeEvent(conv, 'spotlight', { target, until }));
+  }
+
+  // ------------------------------------------------------- chat lock
+
+  isLocked(conv: ConvId) {
+    return !!this.convs.get(conv)?.locked && !!this.settings.chatLock && !this.unlocked.has(conv);
+  }
+
+  hasLock(conv: ConvId) {
+    return !!this.convs.get(conv)?.locked && !!this.settings.chatLock;
+  }
+
+  setConvLocked(conv: ConvId, locked: boolean) {
+    const c = this.convs.get(conv);
+    if (!c) return;
+    const next = { ...c };
+    if (locked) next.locked = true;
+    else delete next.locked;
+    this.saveConv(next);
+    if (locked) this.unlocked.add(conv); // you're in it now; locks when you leave
+    this.notify();
+  }
+
+  unlockConv(conv: ConvId) {
+    this.unlocked.add(conv);
+    this.notify();
+  }
+
+  /** Locks every locked chat again (app hidden, idle lock, or leaving it). */
+  relockChats() {
+    if (!this.unlocked.size) return;
+    this.unlocked.clear();
+    this.notify();
+  }
+
+  // ------------------------------------------------- retry & forward
+
+  /** My message that hasn't reached anyone for a while. */
+  isStuck(e: StoredEvent) {
+    return e.author === this.me && !this.isSelfChat(e.conv) && this.deliveryOf(e) === 'waiting' && Date.now() - e.ts > STUCK_AFTER_MS;
+  }
+
+  /** "Retry" on an unsent message: reconnect to everyone in the chat now; it goes out as soon as a connection opens. */
+  retrySend(e: StoredEvent) {
+    const others = this.participants(e.conv).filter((u) => u !== this.me);
+    let sent = false;
+    for (const p of others) {
+      if (this.sendTo(p, { t: 'event', e: stripEvent(e) })) sent = true;
+      else this.retryPeer(p);
+    }
+    if (sent) this.markSent(e);
+    else {
+      const offline = others.filter((u) => this.peerStatus(u) === 'offline');
+      this.toast(
+        offline.length === others.length
+          ? `${others.length === 1 ? this.nameOf(others[0]).split(' ')[0] + ' is' : 'Everyone is'} offline. It will be sent when they're back.`
+          : 'Trying again…',
+      );
+    }
+    this.notify();
+  }
+
+  /** Sends copies of messages to other chats. Photos and files need to be on this device. */
+  async forward(ids: string[], convs: ConvId[]) {
+    let skipped = 0;
+    const list = ids.map((id) => this.byId.get(id)).filter((x): x is StoredEvent => !!x && isMessage(x) && !x.local.revoked).sort((a, b) => a.ts - b.ts);
+    for (const conv of convs) {
+      for (const x of list) {
+        const b = x.body as Record<string, unknown>;
+        if (b.viewOnce === true || b.secret === true) {
+          skipped++;
+          continue;
+        }
+        if (x.kind === 'text') await this.sendText(conv, this.textOf(x));
+        else if (x.kind === 'gif') await this.sendGif(conv, { id: String(b.id), url: String(b.url), width: Number(b.width), height: Number(b.height), title: b.title as string | undefined }, !!b.sticker);
+        else if (x.kind === 'location') await this.sendLocation(conv, b as unknown as LocationBody);
+        else if (x.kind === 'image' || x.kind === 'file') {
+          const fb = b as unknown as FileBody;
+          const rec = await db.get<{ fileId: string; blob: Blob }>('files', fb.fileId);
+          if (!rec) {
+            skipped++;
+            continue;
+          }
+          await this.sendFiles(conv, [new File([rec.blob], fb.name, { type: fb.type })], x.kind === 'image' ? 'image' : 'document', fb.caption ?? '');
+        } else skipped++;
+      }
+    }
+    if (skipped) this.toast(`${skipped} item${skipped === 1 ? " couldn't" : "s couldn't"} be forwarded (secret, view once, calls, or files not on this device).`);
+  }
+
+  // ------------------------------------------------------- upload progress
+
+  /** Bytes sent of my file, across everyone downloading it right now. */
+  uploadOf(fileId: string): { sent: number; total: number } | null {
+    const m = this.uploads.get(fileId);
+    if (!m?.size) return null;
+    let sent = 0;
+    let total = 0;
+    for (const u of m.values()) {
+      sent += u.sent;
+      total += u.total;
+    }
+    return { sent, total };
+  }
+
+  cancelUpload(fileId: string) {
+    for (const u of this.uploads.get(fileId)?.values() ?? []) u.abort.abort();
   }
 
   /** Removes message content from this device. Sequence numbers are kept so sync doesn't re-download them. */
@@ -2313,7 +2568,7 @@ export class ChatEngine {
 
   /** A received hug or slap in this chat that hasn't been shown full-screen yet. */
   unplayedGesture(conv: ConvId): StoredEvent | undefined {
-    return this.eventsOf(conv).find((x) => (x.kind === 'hug' || x.kind === 'slap') && x.author !== this.me && !x.local.played && !x.local.revoked);
+    return this.eventsOf(conv).find((x) => (x.kind === 'hug' || x.kind === 'slap' || x.kind === 'knock') && x.author !== this.me && !x.local.played && !x.local.revoked);
   }
 
   // ------------------------------------------------------------- like meter

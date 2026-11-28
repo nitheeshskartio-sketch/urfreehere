@@ -1,9 +1,10 @@
-import { Trash2 } from 'lucide-react';
+import { Lock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../../ui/Button';
 import { CopyButton } from '../../../ui/CopyButton';
 import { useEngine } from '../hooks';
-import { setThemePreference, themePreference, useTheme } from '../../../lib/theme';
+import { LockSetupDialog, UnlockDialog } from './ChatExtras';
+import { PALETTES, setThemePreference, themePreference, usePalette, useTheme } from '../../../lib/theme';
 import { enableDesktopNotifications, notificationPermission } from '../lib/notify';
 import { formatUserId } from '../lib/encoding';
 import type { AvatarRef } from '../lib/types';
@@ -50,6 +51,36 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
   );
 }
 
+function PalettePicker() {
+  const [palette, setPalette] = usePalette();
+  return (
+    <div>
+      <p className="mb-2 text-[13px] font-medium text-ink-soft">Colour theme</p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        {PALETTES.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setPalette(p.id)}
+            aria-pressed={palette === p.id}
+            className={`flex flex-col items-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-[12.5px] font-medium transition-colors ${
+              palette === p.id ? 'border-accent bg-accent-soft text-ink' : 'border-line text-ink-soft hover:border-accent/50'
+            }`}
+          >
+            <span className="flex -space-x-1.5" aria-hidden>
+              {p.swatch.map((c, i) => (
+                <span key={i} className="size-5 rounded-full border-2 border-panel shadow-sm" style={{ background: c }} />
+              ))}
+            </span>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[12px] text-muted">Works with light and dark mode. Saved on this device.</p>
+    </div>
+  );
+}
+
 function AppearanceSettings() {
   const e = useEngine();
   useTheme(); // re-render when the theme changes elsewhere
@@ -67,6 +98,7 @@ function AppearanceSettings() {
         ]}
         onChange={(v) => setThemePreference(v)}
       />
+      <PalettePicker />
       <div>
         <Choice
           label="Text size"
@@ -162,6 +194,65 @@ function NotificationToggles() {
         hint="Play a short sound when a new message arrives."
       />
     </>
+  );
+}
+
+/** Chat lock PIN: change it, fingerprint / face, or turn chat lock off (unlocks every chat). */
+function ChatLockSettings() {
+  const e = useEngine();
+  const cfg = e.settings.chatLock;
+  const [step, setStep] = useState<null | 'verify-change' | 'change' | 'verify-off' | 'new'>(null);
+  const lockedCount = [...e.convs.values()].filter((c) => c.locked).length;
+  return (
+    <div className="rounded-lg border border-line p-3.5">
+      <p className="flex items-center gap-2 text-sm font-medium text-ink">
+        <Lock className="size-4 text-accent" /> Chat lock
+      </p>
+      <p className="mt-1 text-[13px] leading-relaxed text-muted">
+        {cfg
+          ? `${lockedCount} locked chat${lockedCount === 1 ? '' : 's'}${cfg.credId ? ' · fingerprint / face on' : ''}. Lock or unlock a chat from its ⋮ menu.`
+          : 'Protect chats with a PIN (and fingerprint / face where your device has it). Lock a chat from its ⋮ menu, or set your PIN now.'}
+      </p>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {cfg ? (
+          <>
+            <Button size="sm" variant="secondary" onClick={() => setStep('verify-change')}>
+              Change PIN
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => setStep('verify-off')}>
+              Turn off chat lock
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" variant="secondary" onClick={() => setStep('new')}>
+            Set PIN
+          </Button>
+        )}
+      </div>
+      {step === 'verify-change' && <UnlockDialog title="Enter your current PIN" onClose={() => setStep(null)} onUnlocked={() => setStep('change')} />}
+      {(step === 'change' || step === 'new') && (
+        <LockSetupDialog
+          title={step === 'new' ? 'Set a chat lock PIN' : 'Set a new PIN'}
+          onClose={() => setStep(null)}
+          onDone={() => {
+            setStep(null);
+            e.toast('PIN saved', 'success');
+          }}
+        />
+      )}
+      {step === 'verify-off' && (
+        <UnlockDialog
+          title="Turn off chat lock"
+          onClose={() => setStep(null)}
+          onUnlocked={() => {
+            setStep(null);
+            for (const c of e.convs.values()) if (c.locked) e.setConvLocked(c.id, false);
+            void e.updateSettings({ chatLock: null });
+            e.toast('Chat lock is off. All chats are unlocked.', 'success');
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -285,6 +376,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
 
       {tab === 'privacy' && (
         <div className="space-y-5 p-4 text-sm sm:p-5">
+          <ChatLockSettings />
           <Toggle
             checked={e.settings.idleLock}
             onChange={(v) => void e.updateSettings({ idleLock: v })}

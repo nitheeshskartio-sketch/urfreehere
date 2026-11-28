@@ -21,6 +21,7 @@ import {
   Users,
   WifiOff,
   X,
+  Lock,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../../ui/Button';
@@ -33,6 +34,7 @@ import { shortTime } from '../lib/time';
 import type { Conversation } from '../lib/types';
 import { enableDesktopNotifications, notificationPermission } from '../lib/notify';
 import { Ticks } from './Ticks';
+import { MuteDialog, mutedUntilText } from './ChatExtras';
 
 export type Dialog = 'new-chat' | 'new-group' | 'join' | 'scan' | 'settings' | 'sign-out' | null;
 
@@ -76,7 +78,7 @@ export function Sidebar({
       return !c.archived;
     })
     .filter((c) => (filter === 'dm' ? c.type === 'dm' : filter === 'group' ? c.type === 'group' : filter === 'unread' ? c.unread > 0 : true))
-    .filter((c) => !q || e.convTitle(c).toLowerCase().includes(q) || (e.lastEvent(c.id) && e.describe(e.lastEvent(c.id)!).toLowerCase().includes(q)))
+    .filter((c) => !q || e.convTitle(c).toLowerCase().includes(q) || (!e.hasLock(c.id) && e.lastEvent(c.id) && e.describe(e.lastEvent(c.id)!).toLowerCase().includes(q)))
     .sort((a, b) => b.lastTs - a.lastTs);
 
   const archivedCount = all.filter((c) => c.archived && !c.hidden && !isRequest(c) && !hiddenGroup(c)).length;
@@ -84,7 +86,7 @@ export function Sidebar({
 
   // Leave an emptied Requests/Archived view (e.g. after accepting the last request).
   useEffect(() => {
-    if ((view === 'requests' && requestCount === 0) || (view === 'archived' && archivedCount === 0)) setView('chats');
+    if (view === 'requests' && requestCount === 0) setView('chats');
   }, [view, requestCount, archivedCount]);
   const sections: [string, Conversation[]][] =
     view === 'chats'
@@ -200,7 +202,22 @@ export function Sidebar({
             </button>
           )}
         </div>
-        {view === 'chats' && <div className="flex gap-1.5 overflow-x-auto pb-0.5">{[chip('unread', 'Unread'), chip('dm', 'Chats'), chip('group', 'Groups')]}</div>}
+        {view !== 'requests' && (
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {[chip('unread', 'Unread'), chip('dm', 'Chats'), chip('group', 'Groups')]}
+            <button
+              type="button"
+              onClick={() => setView((v) => (v === 'archived' ? 'chats' : 'archived'))}
+              aria-pressed={view === 'archived'}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors ${
+                view === 'archived' ? 'border-accent bg-accent text-white' : 'border-line-strong text-ink-soft hover:bg-subtle'
+              }`}
+            >
+              <Archive className="size-3" />
+              Archived{archivedCount ? ` ${archivedCount}` : ''}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -208,7 +225,6 @@ export function Sidebar({
         {view === 'chats' && !q && requestCount > 0 && (
           <SpecialRow icon={Inbox} label="Message requests" count={requestCount} onClick={() => setView('requests')} accent />
         )}
-        {view === 'chats' && !q && archivedCount > 0 && <SpecialRow icon={Archive} label="Archived" count={archivedCount} onClick={() => setView('archived')} />}
 
         {list.length === 0 ? (
           <EmptyList view={view} searching={!!q} onDialog={onDialog} hasAny={all.length > 0} />
@@ -286,10 +302,18 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
   const self = e.isSelfChat(conv);
   const online = conv.type === 'dm' && !self ? e.peerStatus(conv.peerId!) !== 'offline' : undefined;
   const unread = conv.unread > 0 && !conv.muted;
+  const lockedChat = e.hasLock(conv.id);
+  const [muting, setMuting] = useState(false);
 
   let preview: React.ReactNode = '';
   if (conv.joining) preview = conv.joining.status === 'rejected' ? 'Request declined' : 'Waiting to be added…';
   else if (blocked) preview = 'Blocked';
+  else if (lockedChat)
+    preview = (
+      <span className="inline-flex items-center gap-1">
+        <Lock className="size-3" /> Locked chat
+      </span>
+    );
   else if (typing.length) preview = <span className="text-accent">typing…</span>;
   else if (last) {
     const mine = last.author === e.me && last.kind !== 'op';
@@ -323,7 +347,11 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
           </span>
           <span className="mt-0.5 flex items-center gap-2">
             <span className={`chat-meta min-w-0 flex-1 truncate ${unread ? 'font-semibold text-ink' : 'text-muted'}`}>{preview}</span>
-            {conv.muted && !self && <BellOff className="size-3.5 shrink-0 text-muted" aria-label="Muted" />}
+            {conv.muted && !self && (
+              <span title={conv.mutedUntil ? `Muted until ${mutedUntilText(conv.mutedUntil)}` : 'Muted'} className="shrink-0">
+                <BellOff className="size-3.5 text-muted" aria-label={conv.mutedUntil ? `Muted until ${mutedUntilText(conv.mutedUntil)}` : 'Muted'} />
+              </span>
+            )}
             {conv.unread > 0 && (
               <span className={`min-w-5 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white ${conv.muted ? 'bg-muted' : 'bg-danger'}`}>
                 {conv.unread > 99 ? '99+' : conv.unread}
@@ -339,7 +367,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
             trigger={<EllipsisVertical className="size-4" />}
             items={[
               { label: conv.pinned ? 'Unpin' : 'Pin', icon: conv.pinned ? PinOff : Pin, onSelect: () => e.updateConv(conv.id, { pinned: !conv.pinned }) },
-              { label: conv.muted ? 'Unmute' : 'Mute', icon: BellOff, hidden: self, onSelect: () => e.updateConv(conv.id, { muted: !conv.muted }) },
+              { label: conv.muted ? 'Unmute' : 'Mute…', icon: BellOff, hidden: self, onSelect: () => (conv.muted ? e.updateConv(conv.id, { muted: false }) : setMuting(true)) },
               {
                 label: conv.archived ? 'Unarchive' : 'Archive',
                 icon: conv.archived ? ArchiveRestore : Archive,
@@ -362,6 +390,7 @@ function ConversationRow({ conv, active, onOpen, blocked }: { conv: Conversation
           />
         </div>
       </div>
+      {muting && <MuteDialog conv={conv.id} onClose={() => setMuting(false)} />}
     </li>
   );
 }

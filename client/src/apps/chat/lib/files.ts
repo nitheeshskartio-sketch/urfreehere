@@ -24,7 +24,11 @@ export async function sendFile(
   chunkSize: number,
   /** In-flight limits; smaller when the server forwards the data. */
   limits: { high: number; low: number } = { high: BUFFER_HIGH, low: BUFFER_LOW },
+  /** Bytes handed to the channel so far. */
+  onProgress?: (sent: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.addEventListener('abort', () => channel.close(), { once: true });
   channel.binaryType = 'arraybuffer';
   channel.bufferedAmountLowThreshold = limits.low;
   await waitOpen(channel);
@@ -55,6 +59,7 @@ export async function sendFile(
       if (channel.bufferedAmount > limits.high) await drain();
       channel.send(new Uint8Array(block, p, Math.min(chunkSize, block.byteLength - p)));
     }
+    onProgress?.(Math.min(blob.size, offset + block.byteLength) - channel.bufferedAmount);
   }
   channel.send(JSON.stringify({ t: 'end' }));
   // The receiver closes the channel once it has verified the file.

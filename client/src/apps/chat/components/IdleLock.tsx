@@ -8,8 +8,12 @@ const ACTIVITY = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'
  * Privacy screen: after 20 seconds without activity the app is blurred behind
  * a lock. Any movement, tap or key brings it straight back, exactly where it was.
  */
-export function IdleLock({ enabled }: { enabled: boolean }) {
+export function IdleLock({ enabled, onLock }: { enabled: boolean; onLock?: () => void }) {
   const [locked, setLocked] = useState(false);
+  // Locked chats lock again too.
+  useEffect(() => {
+    if (locked) onLock?.();
+  }, [locked]); // eslint-disable-line react-hooks/exhaustive-deps
   const timer = useRef<number>();
   const hiddenAt = useRef<number | null>(null);
 

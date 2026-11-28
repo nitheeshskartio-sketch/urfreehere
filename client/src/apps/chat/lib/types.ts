@@ -55,18 +55,24 @@ export interface Conversation {
   /** "Delete chat": hidden from the list until a new message arrives. */
   hidden?: boolean;
   joining?: JoiningInfo;
+  /** Muted until this time, then unmuted automatically (only while `muted`). */
+  mutedUntil?: number;
+  /** Needs the chat-lock PIN (or fingerprint / face) to open. */
+  locked?: boolean;
+  /** Chat background picked for this conversation (this device only). */
+  background?: string;
 }
 
 /**
  * skip: stands in for a message that was never delivered and was purged (keeps the sequence gap-free).
  * edit: new text for one of the author's own text messages (latest wins).
  * voice: a voice call started in this chat (body: the call's room code).
- * hug / slap: full-screen gestures. meter: like/dislike totals. promise / promise-reply: a promise request and its Yes / No / cancel answer.
+ * hug / slap / knock: full-screen gestures. spotlight: a message shown at the top of the chat for a while. meter: like/dislike totals. promise / promise-reply: a promise request and its Yes / No / cancel answer.
  */
-export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'slap' | 'promise' | 'promise-reply' | 'meter' | 'voice' | 'edit';
+export type EventKind = 'text' | 'image' | 'file' | 'location' | 'gif' | 'op' | 'react' | 'delete' | 'mood' | 'skip' | 'hug' | 'slap' | 'promise' | 'promise-reply' | 'meter' | 'voice' | 'edit' | 'knock' | 'spotlight';
 
 /** Full-screen gestures between two people. */
-export type Gesture = 'hug' | 'slap';
+export type Gesture = 'hug' | 'slap' | 'knock';
 
 /** Like / dislike totals one person gave the other (running totals, latest wins). */
 export interface Meter {
@@ -186,6 +192,23 @@ export interface Settings {
   idleLock: boolean;
   /** Festive decorations (Christmas, New Year, Onam, Diwali) when it's the season. */
   seasonal: boolean;
+  /** Chat lock: PIN (salted PBKDF2 hash) and, optionally, a fingerprint / face passkey on this device. */
+  chatLock?: ChatLockConfig | null;
+}
+
+export interface ChatLockConfig {
+  salt: string;
+  hash: string;
+  /** WebAuthn credential ID (base64url) for unlocking with fingerprint / face. */
+  credId?: string;
+}
+
+/** A message shown at the top of a chat until `until`. */
+export interface Spotlight {
+  target: string;
+  until: number;
+  author: UserId;
+  ts: number;
 }
 
 export type FileTransferState =
