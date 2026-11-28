@@ -18,6 +18,7 @@ import { Sidebar, type Dialog } from '../components/Sidebar';
 import { useEngine, useMediaQuery } from '../hooks';
 import { engine } from '../lib/engine';
 import { startNotifications } from '../lib/notify';
+import { useSeason } from '../../../site/season';
 import type { ScanTarget } from '../../../lib/qr';
 
 let started = false;
@@ -37,6 +38,7 @@ const convPath = (id: string) => `/chat/c/${encodeURIComponent(id)}`;
 
 export default function ChatApp({ path }: { path: string }) {
   const e = useEngine();
+  const season = useSeason(e.settings.seasonal !== false);
   const route = parseRoute(path);
   const desktop = useMediaQuery('(min-width: 768px)');
   const wide = useMediaQuery('(min-width: 1280px)');
@@ -202,7 +204,7 @@ export default function ChatApp({ path }: { path: string }) {
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-rail">
       {/* On phones the open conversation uses the whole screen, like the Teams app. */}
       <div className={showChat && !desktop ? 'hidden' : ''}>
-        <TopBar query={query} onQuery={setQuery} onProfile={() => setDialog('settings')} />
+        <TopBar query={query} onQuery={setQuery} onProfile={() => setDialog('settings')} season={season} />
       </div>
       <div className="flex min-h-0 flex-1">
       <AppRail onSettings={() => setDialog('settings')} />

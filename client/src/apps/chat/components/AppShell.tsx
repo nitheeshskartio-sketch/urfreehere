@@ -9,9 +9,10 @@ import { ThemeToggle } from '../../../ui/ThemeToggle';
 import { InstallButton } from '../../../ui/InstallButton';
 import { CoffeeButton } from '../../../site/coffee/CoffeeButton';
 import { useEngine } from '../hooks';
+import type { SeasonInfo } from '../../../site/season';
 
 /** Teams-style title bar: product name, search, theme switch and your profile. */
-export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: (q: string) => void; onProfile: () => void }) {
+export function TopBar({ query, onQuery, onProfile, season }: { query: string; onQuery: (q: string) => void; onProfile: () => void; season?: SeasonInfo | null }) {
   const e = useEngine();
   const me = e.profile!;
   // Double-click the logo for the admin console; a single click still goes home.
@@ -27,7 +28,8 @@ export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: 
   };
   const status = e.net === 'online' ? 'Available' : e.net === 'connecting' ? 'Connecting…' : e.net === 'replaced' ? 'Open in another tab' : 'Offline';
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 bg-rail px-3 text-ink">
+    <header className="relative flex h-12 shrink-0 items-center gap-3 bg-rail px-3 text-ink">
+      {season && <span className="season-strip" aria-hidden />}
       {adminOpen && (
         <AdminLoginDialog
           onClose={() => setAdminOpen(false)}
@@ -41,6 +43,12 @@ export function TopBar({ query, onQuery, onProfile }: { query: string; onQuery: 
         <SiteMark className="size-6" />
         <span className="text-[14px] font-semibold md:hidden lg:inline">Humble</span>
       </a>
+      {season && (
+        <span className="season-greet hidden shrink-0 items-center gap-1.5 rounded-full border border-line bg-panel px-2.5 py-0.5 text-[12px] font-medium text-ink-soft xl:inline-flex" title={season.greeting}>
+          <span aria-hidden>{season.emoji}</span>
+          {season.greeting}
+        </span>
+      )}
       <div className="relative mx-auto hidden w-full max-w-[560px] md:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
         <input

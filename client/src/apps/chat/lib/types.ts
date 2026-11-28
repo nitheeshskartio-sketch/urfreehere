@@ -184,6 +184,8 @@ export interface Settings {
   clock: 'auto' | '12h' | '24h';
   /** Blur the app behind a lock after 20 seconds without activity. */
   idleLock: boolean;
+  /** Festive decorations (Christmas, New Year, Onam, Diwali) when it's the season. */
+  seasonal: boolean;
 }
 
 export type FileTransferState =

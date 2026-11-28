@@ -188,3 +188,98 @@ html[data-chat-density='compact'] .chat-list-row {
   animation: coffee-pop 1.9s ease-out both;
   transform-origin: 60px 68px;
 }
+
+/* ---- Festive decorations ------------------------------------------------------
+   Switched on by <html data-season="…"> (site/season.ts). Purely decorative:
+   pseudo-elements that take no clicks and never move anything. */
+html[data-season='christmas'] {
+  --season-ring: repeating-conic-gradient(#d62839 0 30deg, #f4f1ea 30deg 45deg, #1f8a4c 45deg 75deg, #f4f1ea 75deg 90deg);
+  --season-ornament: '🎄';
+  --season-strip: radial-gradient(circle, #ff4d5e 0 2px, transparent 2.6px) 0 50% / 30px 7px repeat-x,
+    radial-gradient(circle, #3ddc84 0 2px, transparent 2.6px) 10px 50% / 30px 7px repeat-x,
+    radial-gradient(circle, #ffd166 0 2px, transparent 2.6px) 20px 50% / 30px 7px repeat-x,
+    linear-gradient(rgb(var(--c-line-strong, 160 160 160) / 0.7), rgb(var(--c-line-strong, 160 160 160) / 0.7)) 0 50% / 100% 1px no-repeat;
+}
+html[data-season='newyear'] {
+  --season-ring: conic-gradient(#f5c542, #fff4c2, #c9a227, #dfe3ee, #a7b0c8, #f5c542);
+  --season-ornament: '✨';
+  --season-strip: linear-gradient(90deg, #c9a227, #fff4c2, rgb(var(--c-accent)), #dfe3ee, #f5c542, #c9a227) 0 100% / 200% 2px no-repeat;
+}
+html[data-season='onam'] {
+  --season-ring: repeating-conic-gradient(#ffc300 0 24deg, #ff7b00 24deg 48deg, #f8f4e8 48deg 60deg, #c1121f 60deg 84deg, #4c9a2a 84deg 96deg);
+  --season-ornament: '🌼';
+  --season-strip: radial-gradient(circle, #ffc300 0 2.6px, transparent 3.2px) 0 50% / 14px 7px repeat-x,
+    radial-gradient(circle, #ff7b00 0 2.6px, transparent 3.2px) 7px 50% / 14px 7px repeat-x;
+}
+html[data-season='diwali'] {
+  --season-ring: conic-gradient(#ff8c00, #ffd166, #d1306f, #ff8c00, #ffd166, #d1306f, #ff8c00);
+  --season-ornament: '🪔';
+  --season-strip: radial-gradient(ellipse 3px 2.4px at 50% 60%, #ffb703 0 70%, transparent 100%) 0 50% / 22px 7px repeat-x,
+    radial-gradient(circle, rgb(255 140 0 / 0.35) 0 4px, transparent 5px) 0 50% / 22px 7px repeat-x;
+}
+
+/* Profile pictures: a festive ring (not when the like/dislike ring is showing)
+   and a small ornament on the top-left, away from the online dot and emoji badge. */
+html[data-season] .season-av:not(.has-ring)::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  padding: 2px;
+  border-radius: 9999px;
+  background: var(--season-ring);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+html[data-season] .season-av::after {
+  content: var(--season-ornament);
+  position: absolute;
+  left: calc(var(--av) * -0.14);
+  top: calc(var(--av) * -0.16);
+  font-size: max(10px, calc(var(--av) * 0.32));
+  line-height: 1;
+  transform: rotate(-14deg);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.25));
+  pointer-events: none;
+  z-index: 1;
+}
+html[data-theme='dark'][data-season] .season-av::before {
+  filter: brightness(0.88) saturate(0.9);
+}
+
+/* A thin festive line along the bottom of the top bar. */
+.season-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  background: var(--season-strip);
+  pointer-events: none;
+  opacity: 0.9;
+}
+html[data-season='newyear'] .season-strip {
+  animation: season-shimmer 6s linear infinite;
+}
+html[data-season='christmas'] .season-strip,
+html[data-season='diwali'] .season-strip {
+  animation: season-twinkle 2.8s ease-in-out infinite alternate;
+}
+html[data-theme='dark'] .season-strip {
+  opacity: 0.75;
+}
+@keyframes season-twinkle {
+  from {
+    filter: brightness(0.85);
+  }
+  to {
+    filter: brightness(1.25);
+  }
+}
+@keyframes season-shimmer {
+  to {
+    background-position: -200% 100%;
+  }
+}

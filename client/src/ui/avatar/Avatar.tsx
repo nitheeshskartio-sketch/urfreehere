@@ -60,7 +60,10 @@ export function Avatar({
   const pct = total ? (ring!.likes / total) * 100 : 0;
   const width = Math.max(2, Math.round(size / 14));
   return (
-    <span className={`relative inline-block shrink-0 ${className}`} style={style}>
+    <span
+      className={`relative inline-block shrink-0 ${size >= 28 ? 'season-av' : ''} ${total > 0 ? 'has-ring' : ''} ${className}`}
+      style={{ ...style, ['--av' as string]: `${size}px` }}
+    >
       <span className="block size-full overflow-hidden rounded-full bg-surface">{inner}</span>
       {total > 0 && (
         <span

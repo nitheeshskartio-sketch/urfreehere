@@ -15,13 +15,19 @@ export interface SiteSettings {
   gifsEnabled: boolean;
   /** New voice calls can be started in chats. */
   micCreateEnabled: boolean;
+  /** Festive decorations: 'auto' follows the calendar, 'off' hides them, or force one festival. */
+  season: Season;
   announcement: Announcement | null;
 }
+
+export const SEASONS = ['auto', 'off', 'christmas', 'newyear', 'onam', 'diwali'] as const;
+export type Season = (typeof SEASONS)[number];
 
 export const settings: SiteSettings = {
   signupsOpen: true,
   gifsEnabled: true,
   micCreateEnabled: true,
+  season: 'auto',
   announcement: null,
 };
 
@@ -30,14 +36,15 @@ export const bannedIds = new Set<string>();
 
 /** What every visitor may see: the banner and which features are switched on. */
 export function publicSettings() {
-  const { announcement, gifsEnabled, micCreateEnabled, signupsOpen } = settings;
-  return { announcement, gifsEnabled, micCreateEnabled, signupsOpen };
+  const { announcement, gifsEnabled, micCreateEnabled, signupsOpen, season } = settings;
+  return { announcement, gifsEnabled, micCreateEnabled, signupsOpen, season };
 }
 
 export function applySettings(patch: Partial<SiteSettings>) {
   for (const k of ['signupsOpen', 'gifsEnabled', 'micCreateEnabled'] as const) {
     if (typeof patch[k] === 'boolean') settings[k] = patch[k]!;
   }
+  if (typeof patch.season === 'string' && (SEASONS as readonly string[]).includes(patch.season)) settings.season = patch.season;
   if (patch.announcement === null) settings.announcement = null;
   else if (patch.announcement && typeof patch.announcement.text === 'string') {
     const text = patch.announcement.text.trim().slice(0, 300);

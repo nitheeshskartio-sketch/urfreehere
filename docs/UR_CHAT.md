@@ -282,3 +282,11 @@ The automated end-to-end run used headless Chrome with separate browser profiles
 `deriveGroup()` was tested with crafted ops: non-admin remove/rename, forged or tampered invites, wrong keys, revocation, and admin changes.
 
 **Not yet tested:** Firefox and Safari, real mobile devices, separate networks, and TURN fallback. Before release, test with `ICE_TRANSPORT_POLICY=relay` (see [STUN_TURN.md](STUN_TURN.md)) and between a phone on mobile data and a laptop on Wi‑Fi.
+
+## Festive decorations
+
+During Christmas (1–26 Dec), New Year (27 Dec – 6 Jan), Onam (Atham to the day after Thiruvonam) and Diwali (Dhanteras to Bhai Dooj), profile pictures get a festive ring and a small ornament, and the top bar gets a thin festive line and a greeting. Nothing else changes. The like/dislike ring takes priority over the festive ring.
+
+- The admin console (Controls → Festive decorations) can pick a festival, follow the calendar (Automatic, the default) or switch them off for everyone.
+- Each person can turn them off in Settings → Appearance → Festive decorations.
+- Onam and Diwali move each year: their dates are in `client/src/site/season.ts` (2025–2030). Check them each year, or set the festival from the admin console.

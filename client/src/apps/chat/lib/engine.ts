@@ -319,6 +319,7 @@ export class ChatEngine {
     density: 'comfortable',
     clock: 'auto',
     idleLock: true,
+    seasonal: true,
   };
 
   contacts = new Map<UserId, Contact>();

@@ -36,6 +36,7 @@ import { Menu } from '../ui/Menu';
 import { Modal } from '../ui/Modal';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { AdminLoginForm } from './AdminLogin';
+import { seasonFor, seasonInfo, type SeasonSetting } from '../site/season';
 import { LOGOUT_EVENT, adminApi, adminErrorText, adminLogout, adminToken } from './api';
 
 // ------------------------------------------------------------------- types
@@ -44,6 +45,7 @@ interface Settings {
   signupsOpen: boolean;
   gifsEnabled: boolean;
   micCreateEnabled: boolean;
+  season?: SeasonSetting;
   announcement: { text: string; tone: 'info' | 'warning' | 'success'; updatedAt: number } | null;
 }
 
@@ -840,7 +842,7 @@ function ControlsSection({ notify }: { notify: Notify }) {
   if (loading && !data) return <Loading />;
   if (!data) return <ErrorBox error={error} onRetry={() => void reload()} />;
   const s = data.settings;
-  const toggle = (key: keyof Omit<Settings, 'announcement'>, label: string) => (v: boolean) => void save({ [key]: v }, `${label} ${v ? 'on' : 'off'}`);
+  const toggle = (key: 'signupsOpen' | 'gifsEnabled' | 'micCreateEnabled', label: string) => (v: boolean) => void save({ [key]: v }, `${label} ${v ? 'on' : 'off'}`);
   return (
     <>
       <Heading title="Controls" sub="Switch features on or off for everyone, right away. Saved across restarts when MongoDB is configured." />
@@ -849,6 +851,39 @@ function ControlsSection({ notify }: { notify: Notify }) {
           <Switch checked={s.signupsOpen} onChange={toggle('signupsOpen', 'Sign-ups')} label="New Humble accounts" description="When off, nobody can create a new account. People who already have one keep using Humble." />
           <Switch checked={s.gifsEnabled} onChange={toggle('gifsEnabled', 'GIFs')} label="GIFs and stickers" description="When off, the GIF and sticker tabs say they're switched off. GIFs already sent still show." />
           <Switch checked={s.micCreateEnabled} onChange={toggle('micCreateEnabled', 'New voice calls')} label="Starting voice calls" description="When off, nobody can start a new call in a chat. Calls already going on keep working." />
+        </div>
+      </Card>
+      <Card className="mt-4">
+        <h2 className="text-[14px] font-semibold">Festive decorations</h2>
+        <p className="mt-0.5 text-[13px] text-muted">
+          A festive ring on profile pictures and a line under the top bar. Automatic follows the calendar
+          {(() => {
+            const now = seasonFor();
+            return now ? ` (today: ${seasonInfo(now).greeting})` : ' (no festival today)';
+          })()}
+          . People can turn them off for themselves in Settings.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              ['auto', 'Automatic'],
+              ['christmas', '🎄 Christmas'],
+              ['newyear', '✨ New Year'],
+              ['onam', '🌼 Onam'],
+              ['diwali', '🪔 Diwali'],
+              ['off', 'Off'],
+            ] as [SeasonSetting, string][]
+          ).map(([v, l]) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={(s.season ?? 'auto') === v}
+              onClick={() => void save({ season: v }, `Festive decorations: ${l.replace(/^\S+ /, '')}`)}
+              className={`rounded-full border px-3 py-1.5 text-[13px] font-medium ${(s.season ?? 'auto') === v ? 'border-accent bg-accent-soft text-accent' : 'border-line text-ink-soft hover:border-accent/50'}`}
+            >
+              {l}
+            </button>
+          ))}
         </div>
       </Card>
       <Card className="mt-4">

@@ -323,6 +323,10 @@ export function attachAdmin(app: Express, opts: AdminOptions) {
         audit(req, `Turned ${names[k]} ${settings[k] ? 'on' : 'off'}`);
       }
     }
+    if (settings.season !== before.season) {
+      changed = true;
+      audit(req, `Festive decorations: ${settings.season}`);
+    }
     if (JSON.stringify(settings.announcement) !== JSON.stringify(before.announcement)) {
       changed = true;
       audit(req, settings.announcement ? `Published announcement: "${settings.announcement.text.slice(0, 80)}"` : 'Removed the announcement');

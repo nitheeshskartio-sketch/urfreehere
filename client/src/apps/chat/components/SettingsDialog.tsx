@@ -110,7 +110,13 @@ function AppearanceSettings() {
         ]}
         onChange={(v) => void e.updateSettings({ clock: v })}
       />
-      <div className="border-t border-line pt-3">
+      <div className="space-y-4 border-t border-line pt-3">
+        <Toggle
+          checked={s.seasonal}
+          onChange={(v) => void e.updateSettings({ seasonal: v })}
+          label="Festive decorations"
+          hint="Christmas, New Year, Onam and Diwali touches on profile pictures and the top bar, only during the festival."
+        />
         <Toggle checked={s.enterToSend} onChange={(v) => void e.updateSettings({ enterToSend: v })} label="Press Enter to send" hint="Use Shift + Enter for a new line." />
       </div>
     </div>
