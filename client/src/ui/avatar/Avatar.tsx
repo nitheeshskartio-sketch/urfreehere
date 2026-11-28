@@ -26,7 +26,18 @@ export function Avatar({
   const style = { width: size, height: size };
   let inner;
   if (avatar && avatar.startsWith('data:image/')) {
-    inner = <img src={avatar} alt="" className="size-full object-cover" draggable={false} />;
+    // Painted as a background, not an <img>: no "Save image", "Open image in new
+    // tab", drag-out or long-press save. (A screenshot can't be prevented.)
+    inner = (
+      <span
+        className="block size-full select-none bg-cover bg-center [-webkit-touch-callout:none]"
+        style={{ backgroundImage: `url("${avatar.replace(/["\\\n]/g, '')}")` }}
+        onContextMenu={(ev) => ev.preventDefault()}
+        onDragStart={(ev) => ev.preventDefault()}
+        role="img"
+        aria-label={name}
+      />
+    );
   } else if (avatar && (avatar.startsWith('ill:') || avatar.startsWith('gen:'))) {
     inner = <AvatarArt refId={avatar} />;
   } else if (group && !name) {
