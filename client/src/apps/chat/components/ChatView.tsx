@@ -37,6 +37,9 @@ import type { Gesture } from '../lib/types';
 import { PromiseBar } from './Promise';
 import { emitBlast } from '../lib/engine';
 
+
+/** Messages drawn per page; older ones load as you scroll up. */
+const PAGE = 40;
 export function ChatView({
   conv,
   onBack,
@@ -126,6 +129,30 @@ export function ChatView({
     if (conv.unread) e.markRead(conv.id);
   }, [conv.unread, conv.id, e]);
 
+  // Only the latest PAGE messages are drawn at first; scrolling up draws older
+  // ones a page at a time. `anchor` is the oldest drawn message, so new
+  // messages arriving never push the ones you're reading out of view.
+  const [anchor, setAnchor] = useState<string | null>(null);
+  useEffect(() => setAnchor(null), [conv.id]);
+  const anchorAt = anchor ? events.findIndex((x) => x.id === anchor) : -1;
+  const start = anchorAt >= 0 ? anchorAt : Math.max(0, events.length - PAGE);
+  const shown = useMemo(() => (start ? events.slice(start) : events), [events, start]);
+  const keepPos = useRef<{ h: number; top: number } | null>(null);
+  const loadOlder = () => {
+    const el = scroller.current;
+    if (!el || keepPos.current || start === 0) return;
+    keepPos.current = { h: el.scrollHeight, top: el.scrollTop };
+    setAnchor(events[Math.max(0, start - PAGE)].id);
+  };
+  // Keep what you were looking at in place after older messages are added above.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const k = keepPos.current;
+    if (!el || !k) return;
+    keepPos.current = null;
+    el.scrollTop = k.top + (el.scrollHeight - k.h);
+  }, [start]);
+
   // Stick to the bottom when new messages arrive (if already there, or the message is mine).
   const lastId = events[events.length - 1]?.id;
   const lastMine = events[events.length - 1]?.author === e.me;
@@ -137,6 +164,8 @@ export function ChatView({
 
   const onScroll = () => {
     const el = scroller.current!;
+    // Near the top: draw the next older page.
+    if (el.scrollTop < 300 && start > 0) loadOlder();
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     atBottom.current = near;
     setShowJump(!near);
@@ -144,13 +173,26 @@ export function ChatView({
 
   const images = useMemo(() => events.filter((x) => x.kind === 'image' && !x.body.viewOnce && !x.body.secret && e.hasFile(String(x.body.fileId))).map((x) => String(x.body.fileId)), [events, e]);
 
-  const jumpTo = (id: string) => {
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
+  const flash = (id: string) => {
     const el = document.getElementById(`m-${id}`);
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('bg-accent-soft/60');
     window.setTimeout(() => el.classList.remove('bg-accent-soft/60'), 1200);
+    return true;
   };
+  const jumpTo = (id: string) => {
+    if (flash(id)) return;
+    // Not drawn yet (older than what's loaded): load back to it, then jump.
+    const i = events.findIndex((x) => x.id === id);
+    if (i < 0 || i >= start) return;
+    setAnchor(events[Math.max(0, i - 5)].id);
+    setPendingJump(id);
+  };
+  useEffect(() => {
+    if (pendingJump && flash(pendingJump)) setPendingJump(null);
+  }, [pendingJump, start]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- header subtitle
   let subtitle: React.ReactNode = '';
@@ -217,13 +259,13 @@ export function ChatView({
             <ArrowLeft className="size-5" />
           </button>
         )}
-        <button type="button" onClick={onInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-left hover:bg-surface">
-          <MoodBadge peer={!isGroup && !self ? conv.peerId : undefined}>
+        <button type="button" onClick={onInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 pl-1.5 pr-2 text-left hover:bg-surface">
+          <MoodBadge peer={!isGroup && !self ? conv.peerId : undefined} size="sm">
             <Avatar
               avatar={e.convImage(conv)}
               name={title}
               seed={conv.peerId ?? conv.groupId}
-              size={40}
+              size={36}
               group={isGroup}
               online={!isGroup && !self && conv.peerId ? e.peerStatus(conv.peerId) !== 'offline' : undefined}
               ring={!isGroup && !self ? e.ringFor(conv.peerId) : null}
@@ -234,7 +276,7 @@ export function ChatView({
             <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">
               <span className="truncate">{subtitle}</span>
               {/* Phones: the like/dislike counts sit under the name instead of the capsule. */}
-              {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} compact className="shrink-0 text-[11.5px] sm:hidden" />}
+              {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} compact className="shrink-0 text-[11.5px] max-[359px]:hidden sm:hidden" />}
             </span>
           </span>
         </button>
@@ -331,7 +373,7 @@ export function ChatView({
       )}
 
       {/* Messages */}
-      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-6">
+      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 sm:px-6">
         {events.length === 0 && !conv.joining && (
           <div className="mx-auto mt-10 max-w-sm rounded-xl bg-panel/80 px-5 py-4 text-center text-sm text-muted shadow-card">
             {self
@@ -341,7 +383,12 @@ export function ChatView({
                 : `No messages yet. Messages to ${title} are delivered directly when you're both online.`}
           </div>
         )}
-        <MessageList events={events} isGroup={isGroup} onReply={setReplyTo} onOpenImage={(id) => setViewer(Math.max(0, images.indexOf(id)))} onJump={jumpTo} />
+        {start > 0 && (
+          <button type="button" onClick={loadOlder} className="mx-auto mb-2 block rounded-full bg-surface px-3 py-1 text-[12px] font-medium text-accent hover:bg-subtle">
+            Load older messages
+          </button>
+        )}
+        <MessageList events={shown} hasOlder={start > 0} isGroup={isGroup} onReply={setReplyTo} onOpenImage={(id) => setViewer(Math.max(0, images.indexOf(id)))} onJump={jumpTo} />
       </div>
 
       {showJump && (
@@ -440,19 +487,21 @@ export function ChatView({
 
 function MessageList({
   events,
+  hasOlder,
   isGroup,
   onReply,
   onOpenImage,
   onJump,
 }: {
   events: StoredEvent[];
+  hasOlder: boolean;
   isGroup: boolean;
   onReply: (e: StoredEvent) => void;
   onOpenImage: (fileId: string) => void;
   onJump: (id: string) => void;
 }) {
   const e = useEngine();
-  const out: React.ReactNode[] = [
+  const out: React.ReactNode[] = hasOlder ? [] : [
     <p key="lifetime" className="mx-auto mb-2 mt-1 w-fit rounded-full bg-surface px-3 py-1 text-center text-[12px] text-muted">
       ⏳ Messages disappear 3 days after they're sent
     </p>,

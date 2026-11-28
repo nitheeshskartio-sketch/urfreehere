@@ -81,7 +81,7 @@ export function Message({
   ];
 
   return (
-    <div className={`group relative flex gap-3 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-0.5'}`} id={`m-${event.id}`}>
+    <div className={`group relative flex gap-3 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-1.5'}`} id={`m-${event.id}`}>
       {!mine && (
         <span className="w-8 shrink-0 pt-[22px]">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} ring={e.ringFor(event.author)} />}</span>
       )}
@@ -103,10 +103,12 @@ export function Message({
                 <button
                   type="button"
                   onClick={() => replied && onJump(replied.id)}
-                  className={`mb-1.5 block w-full rounded border-l-[3px] border-accent bg-ink/[0.05] px-2.5 py-1.5 text-left ${media ? 'm-1 w-[calc(100%-8px)]' : ''}`}
+                  className={`mb-1.5 block w-full min-w-0 max-w-full overflow-hidden rounded border-l-[3px] border-accent bg-ink/[0.05] px-2.5 py-1.5 text-left ${media ? 'm-1 w-[calc(100%-8px)]' : ''}`}
                 >
-                  <span className="block text-[12px] font-semibold text-ink-soft">{replied ? e.nameOf(replied.author) : 'Message'}</span>
-                  <span className="line-clamp-2 text-[13px] text-muted">{replied ? e.describe(replied) : 'Original message not available'}</span>
+                  <span className="block truncate text-[12px] font-semibold text-ink-soft">{replied ? e.nameOf(replied.author) : 'Message'}</span>
+                  <span className="line-clamp-2 whitespace-normal break-words text-[13px] text-muted [overflow-wrap:anywhere]">
+                    {replied ? e.describe(replied).slice(0, 240) : 'Original message not available'}
+                  </span>
                 </button>
               )}
               {revoked ? (
@@ -200,7 +202,7 @@ export function Message({
           </div>
         </div>
         {!revoked && REACTIONS.some((r) => reactions.counts[r.id] > 0) && (
-          <div className={`-mt-1.5 flex flex-wrap gap-1 px-1 ${mine ? 'mr-5 justify-end' : 'ml-1'}`}>
+          <div className={`relative z-[1] -mt-1 mb-0.5 flex max-w-full flex-wrap gap-1 px-1 ${mine ? 'mr-5 justify-end' : 'ml-1'}`}>
             {REACTIONS.filter((r) => reactions.counts[r.id] > 0).map((r) => {
               // Who reacted, shown on the chip: "You", or first names.
               const names = reactions.who[r.id].map((u) => (u === e.me ? 'You' : e.nameOf(u).split(' ')[0]));

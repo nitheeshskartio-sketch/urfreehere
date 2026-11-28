@@ -174,8 +174,8 @@ export function Composer({
         {replyTo && (
           <div className="flex items-center gap-3 border-b border-line px-3 py-2">
             <div className="min-w-0 flex-1 border-l-[3px] border-accent pl-2.5">
-              <p className="text-[12px] font-semibold text-ink-soft">Replying to {e.nameOf(replyTo.author)}</p>
-              <p className="truncate text-[13px] text-muted">{e.describe(replyTo)}</p>
+              <p className="truncate text-[12px] font-semibold text-ink-soft">Replying to {e.nameOf(replyTo.author)}</p>
+              <p className="truncate text-[13px] text-muted">{e.describe(replyTo).slice(0, 240)}</p>
             </div>
             <button type="button" onClick={onCancelReply} className="rounded-md p-1.5 text-muted hover:bg-subtle hover:text-ink" aria-label="Cancel reply">
               <X className="size-4" />
