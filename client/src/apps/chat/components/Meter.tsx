@@ -95,16 +95,28 @@ export function ProfileMeter({ peer, canTap }: { peer: UserId; canTap: boolean }
   );
 }
 
-/** Like / dislike capsule on the right of the chat header: what they gave me. */
-export function MeterInline({ peer }: { peer: UserId }) {
+/**
+ * What they gave me, in the chat header: a capsule on the right on larger
+ * screens, or `compact` (small text under the name) on phones.
+ */
+export function MeterInline({ peer, compact = false, className = '' }: { peer: UserId; compact?: boolean; className?: string }) {
   const e = useEngine();
   const m = e.meterOf(peer, peer);
   const first = e.nameOf(peer).split(' ')[0];
+  const label = `${first} gave you ${m.likes} likes and ${m.dislikes} dislikes`;
+  if (compact) {
+    return (
+      <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${className}`} title={label}>
+        <span className="text-success">👍 {fmt(m.likes)}</span>
+        <span className="text-danger">👎 {fmt(m.dislikes)}</span>
+      </span>
+    );
+  }
   return (
     <span
-      className="mr-1 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-full border border-line bg-surface text-[12px] font-semibold tabular-nums shadow-sm"
-      title={`${first} gave you ${m.likes} likes and ${m.dislikes} dislikes`}
-      aria-label={`${first} gave you ${m.likes} likes and ${m.dislikes} dislikes`}
+      className={`mr-1 h-7 shrink-0 items-center overflow-hidden rounded-full border border-line bg-surface text-[12px] font-semibold tabular-nums shadow-sm ${className || 'inline-flex'}`}
+      title={label}
+      aria-label={label}
       role="img"
     >
       <span className="flex items-center gap-1 px-2.5 text-success">

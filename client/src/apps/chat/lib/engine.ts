@@ -208,7 +208,7 @@ function validEvent(e: unknown): e is ChatEvent {
         (b.accuracy === undefined || (typeof b.accuracy === 'number' && b.accuracy >= 0))
       );
     case 'react':
-      return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'like' || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
+      return typeof b.target === 'string' && b.target.length <= 64 && (b.r === null || b.r === 'like' || b.r === 'dislike' || b.r === 'love' || b.r === 'broken' || b.r === 'slap');
     case 'delete':
       return typeof b.target === 'string' && b.target.length <= 64;
     case 'edit':
@@ -2221,8 +2221,8 @@ export class ChatEngine {
 
   /** Counts per reaction and my own, for a message. */
   reactionsOf(id: string): { counts: Record<Reaction, number>; who: Record<Reaction, UserId[]>; mine: Reaction | null } {
-    const counts: Record<Reaction, number> = { like: 0, love: 0, broken: 0, slap: 0 };
-    const who: Record<Reaction, UserId[]> = { like: [], love: [], broken: [], slap: [] };
+    const counts: Record<Reaction, number> = { like: 0, dislike: 0, love: 0, broken: 0, slap: 0 };
+    const who: Record<Reaction, UserId[]> = { like: [], dislike: [], love: [], broken: [], slap: [] };
     let mine: Reaction | null = null;
     for (const [author, v] of this.reactions.get(id) ?? []) {
       if (!v.r) continue;
@@ -2474,6 +2474,8 @@ export class ChatEngine {
     if (err) return this.toast(err, 'error');
     const next = this.reactionsOf(target.id).mine === r ? null : r;
     await this.publish(await this.makeEvent(target.conv, 'react', { target: target.id, r: next }));
+    // 👍 / 👎 on someone's message also counts on their profile's like meter (in my chat with them).
+    if ((next === 'like' || next === 'dislike') && target.author !== this.me) this.bumpMeter(target.author, next);
   }
 
   /** Seconds left to delete one of my messages for everyone (0 = too late). */

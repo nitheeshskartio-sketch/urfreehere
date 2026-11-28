@@ -231,10 +231,14 @@ export function ChatView({
           </MoodBadge>
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold">{title}</span>
-            <span className="block truncate text-[12.5px] text-muted">{subtitle}</span>
+            <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">
+              <span className="truncate">{subtitle}</span>
+              {/* Phones: the like/dislike counts sit under the name instead of the capsule. */}
+              {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} compact className="shrink-0 text-[11.5px] sm:hidden" />}
+            </span>
           </span>
         </button>
-        {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} />}
+        {!isGroup && !self && contact?.state === 'contact' && conv.peerId && <MeterInline peer={conv.peerId} className="hidden sm:inline-flex" />}
         {canCall && (
           <button
             type="button"
@@ -253,7 +257,7 @@ export function ChatView({
             <UserPlus className="size-5" />
           </button>
         )}
-        <button type="button" onClick={onInfo} className="rounded-md p-2 text-muted hover:bg-surface hover:text-ink" aria-label={isGroup ? 'Group info' : 'Contact info'} title="Info">
+        <button type="button" onClick={onInfo} className="hidden rounded-md p-2 text-muted hover:bg-surface hover:text-ink sm:block" aria-label={isGroup ? 'Group info' : 'Contact info'} title="Info">
           <Info className="size-5" />
         </button>
         <Menu

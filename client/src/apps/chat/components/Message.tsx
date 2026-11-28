@@ -1,5 +1,5 @@
 import { Ban, Check, Copy, Eye, EyeOff, EllipsisVertical, Flame, Download, ExternalLink, FileText, ImageOff, LoaderCircle, MapPin, Pencil, Reply, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatBytes } from '../../../lib/format';
 import { GestureCard, PromiseCard } from './Promise';
 import { VoiceCard } from './VoiceCall';
@@ -81,7 +81,7 @@ export function Message({
   ];
 
   return (
-    <div className={`group relative flex gap-2.5 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-0.5'}`} id={`m-${event.id}`}>
+    <div className={`group relative flex gap-3 focus-within:z-30 ${mine ? 'justify-end' : 'justify-start'} ${showSender ? 'chat-row-first mt-4' : 'mt-0.5'}`} id={`m-${event.id}`}>
       {!mine && (
         <span className="w-8 shrink-0 pt-[22px]">{showSender && <Avatar avatar={profile?.avatar} name={e.nameOf(event.author)} seed={event.author} size={32} ring={e.ringFor(event.author)} />}</span>
       )}
@@ -129,9 +129,9 @@ export function Message({
                     }}
                   />
                 ) : bigEmoji ? (
-                  <p className="text-4xl leading-tight">{text}</p>
+                  <p className="px-1.5 text-4xl leading-tight">{text}</p>
                 ) : (
-                  <p className="chat-text whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{linkify(text)}</p>
+                  <LongText text={text} />
                 ))}
               {edited && !editing && !revoked && <span className="chat-meta mt-0.5 block text-right italic text-muted">edited</span>}
               {event.kind === 'image' && <ImageContent body={body as unknown as FileBody} onOpen={onOpenImage} />}
@@ -544,6 +544,35 @@ function ViewOnceViewer({ snapshot, onClose }: { snapshot: ViewOnceSnapshot; onC
         )}
       </div>
     </div>
+  );
+}
+
+/** Long messages are cut to 8 lines with "Show more" / "Show less". */
+function LongText({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const check = () => setClipped(el.scrollHeight > el.clientHeight + 2);
+    check();
+    // Re-check when the width changes (window resized, panel opened).
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+  return (
+    <>
+      <p ref={ref} className={`chat-text whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${open ? '' : 'line-clamp-[8]'}`}>
+        {linkify(text)}
+      </p>
+      {(clipped || open) && (
+        <button type="button" onClick={() => setOpen((o) => !o)} className="chat-meta mt-1 font-semibold text-accent hover:underline">
+          {open ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
   );
 }
 

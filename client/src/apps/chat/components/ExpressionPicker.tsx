@@ -1,6 +1,6 @@
 import { CircleAlert, LoaderCircle, RotateCcw, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { EMOJI } from '../lib/emoji';
+import { EMOJI, recentEmoji, rememberEmoji, searchEmoji } from '../lib/emoji';
 import { GifLoadError, gifErrorText, loadGifs, type GifItem } from '../lib/giphy';
 
 type Tab = 'emoji' | 'gifs' | 'stickers';
@@ -73,20 +73,48 @@ export function ExpressionPicker({
 }
 
 function EmojiGrid({ onPick }: { onPick: (e: string) => void }) {
+  const [query, setQuery] = useState('');
+  const [recent, setRecent] = useState(recentEmoji);
+  const pick = (em: string) => {
+    rememberEmoji(em);
+    setRecent(recentEmoji());
+    onPick(em);
+  };
+  const results = query.trim() ? searchEmoji(query) : null;
+  const button = (em: string) => (
+    <button key={em} type="button" onClick={() => pick(em)} className="rounded-md p-1 text-[22px] leading-none hover:bg-subtle" aria-label={`Insert ${em}`}>
+      {em}
+    </button>
+  );
+  const groups = results ? [] : [...(recent.length ? [{ label: 'Recent', items: recent }] : []), ...EMOJI];
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-      {EMOJI.map((group) => (
-        <div key={group.label} className="mb-2">
-          <p className="sticky top-0 bg-panel py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{group.label}</p>
-          <div className="grid grid-cols-8 gap-0.5">
-            {group.items.map((em) => (
-              <button key={em} type="button" onClick={() => onPick(em)} className="rounded-md p-1 text-[22px] leading-none hover:bg-subtle" aria-label={`Insert ${em}`}>
-                {em}
-              </button>
-            ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="px-3 pt-2">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <input
+            value={query}
+            onChange={(ev) => setQuery(ev.target.value)}
+            placeholder="Search emoji"
+            aria-label="Search emoji"
+            className="h-8 w-full rounded-md border border-line bg-panel pl-8 pr-2 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+        </label>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+        {results &&
+          (results.length ? (
+            <div className="grid grid-cols-8 gap-0.5">{results.map(button)}</div>
+          ) : (
+            <p className="py-6 text-center text-[13px] text-muted">No emoji found for "{query}".</p>
+          ))}
+        {groups.map((group) => (
+          <div key={group.label} className="mb-2">
+            <p className="sticky top-0 bg-panel py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{group.label}</p>
+            <div className="grid grid-cols-8 gap-0.5">{group.items.map(button)}</div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

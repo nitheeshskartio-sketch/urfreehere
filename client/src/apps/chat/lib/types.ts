@@ -88,9 +88,10 @@ export interface PromiseStatus {
 export const MOODS = ['😍', '❤️', '🥰', '😊', '🤩', '🥺', '🤝', '😂', '😎', '🤗', '😐', '😴', '😔', '😢', '😡', '💔', '🥶', '🔥', '🙏', '🤔'];
 
 /** Message reactions: one per person per message. */
-export type Reaction = 'like' | 'love' | 'broken' | 'slap';
+export type Reaction = 'like' | 'dislike' | 'love' | 'broken' | 'slap';
 export const REACTIONS: { id: Reaction; emoji: string; label: string }[] = [
   { id: 'like', emoji: '👍', label: 'Like' },
+  { id: 'dislike', emoji: '👎', label: 'Dislike' },
   { id: 'love', emoji: '❤️', label: 'Love' },
   { id: 'broken', emoji: '💔', label: 'Broken heart' },
   { id: 'slap', emoji: '🖐️', label: 'Slap' },

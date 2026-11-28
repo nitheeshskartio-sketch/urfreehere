@@ -182,7 +182,8 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
 
   return (
     <Modal title="Settings" onClose={onClose} wide>
-      <div className="flex gap-1 overflow-x-auto border-b border-line px-3 pt-2">
+      {/* Tabs wrap onto two rows on phones instead of running off the screen. */}
+      <div className="flex flex-wrap gap-x-1 border-b border-line px-2 pt-2 sm:flex-nowrap sm:overflow-x-auto sm:px-3">
         {(
           [
             ['profile', 'Profile'],
@@ -197,7 +198,7 @@ export function SettingsDialog({ onClose, onSignOut }: { onClose: () => void; on
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2 text-sm font-medium transition-colors sm:px-3 ${tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}
           >
             {l}
           </button>
